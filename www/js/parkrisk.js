@@ -71,12 +71,15 @@ const box = (p, r) => {
 const stat = (type, field, name) => ({ statisticType: type, onStatisticField: field, outStatisticFieldName: name });
 const stats = (url, where, groupBy, extra = []) => getJson(url, {
   where, groupByFieldsForStatistics: groupBy, outStatistics: JSON.stringify([stat('count', 'OBJECTID', 'n'), ...extra]), f: 'json',
-}).then((j) => (j.features || []).map((f) => f.attributes));
+}).then((j) => (j.features || []).map((f) => lowerStats(f.attributes)));
+// The city's server returns our statistic names in capitals (N, LAT, LNG, FINE); normalize them.
+const STAT_KEYS = { N: 'n', LAT: 'lat', LNG: 'lng', FINE: 'fine' };
+const lowerStats = (a) => Object.fromEntries(Object.entries(a || {}).map(([k, v]) => [STAT_KEYS[k] || k, v]));
 
 async function dcRisk(p) {
   const months = await dcMonths();
   if (!months.length) throw new Error('DC has not published recent parking tickets yet.');
-  const where = box(p, RADIUS);
+  const where = box(p, RADIUS + 60);   // ticket positions are rounded to about 100 m
   const per = await Promise.all(months.map(async ([y, m]) => {
     const u = DC_URL(y, m);
     const [blocks, times, dates] = await Promise.all([
@@ -91,7 +94,7 @@ async function dcRisk(p) {
     for (const b of m.blocks) {
       if (b.lat == null) continue;
       // keep what's really within the radius, not just in the square
-      if (dist(p, { lat: b.lat, lng: b.lng }) > RADIUS * 1.15) continue;
+      if (dist(p, { lat: b.lat, lng: b.lng }) > RADIUS + 80) continue;
       rows.push({ block: cleanBlock(b.LOCATION), reason: b.VIOLATION_PROC_DESC, n: b.n, fine: b.fine || 0, lat: b.lat, lng: b.lng });
     }
     for (const t of m.times) { const h = parseInt(String(t.ISSUE_TIME ?? '').padStart(4, '0').slice(0, 2), 10); if (h >= 0 && h < 24) hours[h] += t.n; }
@@ -130,7 +133,7 @@ async function reverse(p) {
   const c = lsGet('tr.revCache') || {};
   const k = p.lat.toFixed(4) + ',' + p.lng.toFixed(4);
   if (c[k]) return c[k];
-  const j = await getJson(NOMINATIM, { format: 'jsonv2', lat: p.lat, lon: p.lng, zoom: 18, addressdetails: 1 });
+  const j = await getJson(NOMINATIM, { format: 'jsonv2', lat: p.lat, lon: p.lng, zoom: 17, layer: 'address', addressdetails: 1 });
   const a = j.address || {};
   const v = { road: a.road || '', num: a.house_number ? parseInt(a.house_number, 10) || null : null, county: a.county || '', state: a.state || '', city: a.city || a.town || a.village || a.suburb || '' };
   const keys = Object.keys(c); if (keys.length > 60) delete c[keys[0]];
