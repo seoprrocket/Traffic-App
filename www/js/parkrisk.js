@@ -27,12 +27,15 @@ async function getJson(url, params) {
 }
 export const titleCase = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim()
   .replace(/\b([a-z])/g, (c) => c.toUpperCase()).replace(/\b(Nw|Ne|Sw|Se|Dc|Rpp|Dpw)\b/g, (x) => x.toUpperCase());
-const cleanBlock = (s) => titleCase(String(s || '').replace(/\*+$/, '').replace(/\b(NORTH|SOUTH|EAST|WEST)\s*(S|SI|SID|SIDE)?\s*$/i, (m, d) => `(${d.toLowerCase()} side)`));
+const cleanBlock = (s) => titleCase(String(s || '').replace(/\*+$/, '').trim()
+  .replace(/\b(NORTH|SOUTH|EAST|WEST)\s+(S|SI|SID|SIDE)\s*$/i, (m, d) => `(${d.toLowerCase()} side)`)
+  // the city cuts locations at 32 characters: drop a half-written side ("NW EA", "NW NORT")
+  .replace(/(\b(?:NW|NE|SW|SE))\s+[NSEW][A-Z]{0,4}(?:\s+S[A-Z]*)?$/i, '$1'));
 
 // ---------------------------------------------------------------- why tickets happen, in plain words
 // "car" reasons follow the car (expired tags, inspection), so they don't count against the spot.
 const REASONS = [
-  [/REGIST|INSPECT|\bTAGS?\b|PLATE|DISPLAY OF|NO FRONT/, 'car', 'Paperwork tickets (tags, registration, inspection). These are about the car, not the spot.'],
+  [/REGIST|UNREG|INSPECT|\bTAGS?\b|PLATE|DISPLAY OF|NO FRONT/, 'car', 'Paperwork tickets (tags, registration, inspection). These are about the car, not the spot.'],
   [/RUSH|TOW ?AWAY|NO STANDING/, 'rush', 'Rush-hour or tow-away limits. Read the sign times, often weekday mornings and evenings. Cars get towed.'],
   [/STREET ?(CLEAN|SWEEP)|SWEEP/, 'sweep', 'Street sweeping. Check the sign for the day and hours.'],
   [/EMERGENCY NO PARK|TEMPORARY|SPECIAL EVENT/, 'temp', 'Temporary "Emergency No Parking" signs for moves, filming and events. Look for paper signs on poles.'],
@@ -155,6 +158,7 @@ async function mocoRisk(p, addr) {
   ]);
   // Near = same street, within about two blocks of house numbers. Garage tickets (G35-…) count only when the spot is in that garage.
   const near = (loc) => {
+    if (/^G\d+\s*-/i.test(String(loc).trim())) return false;   // tickets inside county garages (G61-…) aren't street parking
     if (!new RegExp(`\\b${street.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(String(loc).toUpperCase())) return false;
     if (addr.num == null) return true;
     const n = houseNum(loc);

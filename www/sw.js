@@ -1,6 +1,6 @@
 // Offline support: always try the network first (so updates show right away),
 // fall back to the last saved copy when there's no signal.
-const CACHE = 'invictus-radar-v8';
+const CACHE = 'invictus-radar-v9';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'icon.svg', 'css/app.css',
   'vendor/leaflet.css', 'vendor/leaflet.js', 'vendor/leaflet-heat.js', 'vendor/supabase.js',
