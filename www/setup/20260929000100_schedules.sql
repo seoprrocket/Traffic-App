@@ -1,4 +1,4 @@
--- Ticket Radar — scheduled agents
+-- Invictus Traffic Radar — scheduled agents
 -- Run AFTER you have (1) deployed the edge functions and (2) stored two secrets in Vault:
 --   select vault.create_secret('https://YOUR-PROJECT-REF.supabase.co', 'project_url');
 --   select vault.create_secret('PASTE-A-LONG-RANDOM-STRING',           'cron_secret');

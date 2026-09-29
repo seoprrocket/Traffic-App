@@ -1,4 +1,4 @@
--- Ticket Radar — more hazard types, each with its own lifetime. Safe to run more than once.
+-- Invictus Traffic Radar — more hazard types, each with its own lifetime. Safe to run more than once.
 
 alter table public.reports drop constraint if exists reports_type_check;
 alter table public.reports add constraint reports_type_check check (type in (

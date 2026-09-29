@@ -27,7 +27,8 @@ a{color:var(--you)}
 
 header{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
 .brand{display:flex;flex-direction:column;min-width:0;flex:1}
-.brand h1{margin:0;font:700 24px/1 var(--display);letter-spacing:.02em;text-transform:uppercase}
+.brand h1{margin:0;font:700 24px/1 var(--display);letter-spacing:.02em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:420px){.brand h1{font-size:20px}}
 .brand small{color:var(--muted);font-size:12px}
 .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;background:var(--surface2);font-weight:600;font-size:13px;white-space:nowrap}
 .chip .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}

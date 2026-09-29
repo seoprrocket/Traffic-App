@@ -142,7 +142,7 @@ bus.on('fix', (p) => {
   loadOfficialCameras();
   termsGate();
   if (!isNative && location.protocol !== 'https:' && !/^(localhost|127\.)/.test(location.hostname)) setTimeout(() => toast('Open this app over https so GPS alerts work'), 900);
-  if (!cloudConfigured) console.info('Ticket Radar: running on this device only (no Supabase config).');
+  if (!cloudConfigured) console.info('Invictus Traffic Radar: running on this device only (no Supabase config).');
   // live community data while it matters
   setInterval(() => { if (S.cloud && (E.driving || ['map', 'community-map', 'reporting-feed'].includes(S.view))) loadCommunity(); }, 20000);
   setInterval(() => { if (!S.cloud) drawMarkers(); }, 60000);

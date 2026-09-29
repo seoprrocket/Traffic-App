@@ -1,4 +1,4 @@
-# Ticket Radar DC
+# Invictus Traffic Radar
 
 Speed-camera and ticket-zone warnings for drivers in DC and Maryland, as a web app. It includes a community report map and seven AI helpers.
 
@@ -111,7 +111,7 @@ After changing variables, run **Deploys → Trigger deploy**. Saved trips, remin
 
 ## Using it as a web app
 
-- **Keep the app open on screen while driving.** Browsers pause GPS when the phone locks or you switch apps, and that includes switching to Google Maps for directions. On Android, split-screen with Google Maps keeps both running. On iPhone, pick one: Google Maps for directions, or Ticket Radar for warnings. "Time to leave" and meter notifications arrive either way.
+- **Keep the app open on screen while driving.** Browsers pause GPS when the phone locks or you switch apps, and that includes switching to Google Maps for directions. On Android, split-screen with Google Maps keeps both running. On iPhone, pick one: Google Maps for directions, or Invictus Traffic Radar for warnings. "Time to leave" and meter notifications arrive either way.
 - **iPhone notifications** only work after you add the app to your Home Screen and open it from there.
 - **Add it to your home screen** (Safari: Share → Add to Home Screen; Chrome: ⋮ → Add to Home screen). It opens full-screen, and the last version loads even with a weak signal.
 - Voice commands work best in Chrome on Android. On iPhone, Safari support varies by iOS version.

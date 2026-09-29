@@ -59,7 +59,7 @@ async function email(to: string, c: Coach) {
   if (!key || !from) return false;
   const li = (a: string[]) => a.map((x) => `<li style="margin:4px 0">${x.replace(/</g, "&lt;")}</li>`).join("");
   const html = `<div style="font-family:system-ui,sans-serif;max-width:560px;margin:auto;color:#13202b">
-    <p style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#56687a;margin:0">Ticket Radar · weekly coach</p>
+    <p style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#56687a;margin:0">Invictus Traffic Radar · weekly coach</p>
     <h1 style="font-size:24px;margin:6px 0 12px">${c.headline.replace(/</g, "&lt;")}</h1>
     <p>${c.summary.replace(/</g, "&lt;")}</p>
     ${c.wins.length ? `<h3 style="margin-bottom:4px">What went well</h3><ul>${li(c.wins)}</ul>` : ""}
@@ -79,7 +79,7 @@ async function coachOne(userId: string, sendEmail: boolean) {
   if (!s.trips && !s.zone_entries && !s.new_tickets.length) return { skipped: "no activity this week" };
   const c = await askStructured<Coach>({
     model: FAST_MODEL,
-    system: "You write a short weekly driving review for a DC-area driver using Ticket Radar, an app that warns about speed cameras and places they've been ticketed. " +
+    system: "You write a short weekly driving review for a DC-area driver using Invictus Traffic Radar, an app that warns about speed cameras and places they've been ticketed. " +
       "Use only the numbers given. Praise real progress; be specific and practical about what to change. Never encourage speeding or evading enforcement.",
     content: JSON.stringify(s),
     tool, maxTokens: 700,

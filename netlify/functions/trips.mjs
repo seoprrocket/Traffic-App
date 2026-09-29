@@ -26,7 +26,7 @@ export default handle(async (req) => {
   await device(b.device, b.secret);                          // every other action needs a registered phone
 
   if (act === 'test') {
-    const sent = await pushTo(b.device, { title: 'Ticket Radar', body: 'Notifications are working on this phone.', url: './' });
+    const sent = await pushTo(b.device, { title: 'Invictus Traffic Radar', body: 'Notifications are working on this phone.', url: './' });
     if (!sent) throw new HttpError(409, 'Could not reach this phone. Turn notifications off and on again.');
     return json({ ok: true });
   }

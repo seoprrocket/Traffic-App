@@ -141,7 +141,7 @@ function showPlan(p) {
     ${chart(p)}
     <div class="card"><h3 style="margin-top:0">On this route</h3>${riskList(p.route)}</div>`;
   const begin = () => startTrip({ dest: p.end, name: p.name, arriveBy: p.arriveBy, factor: p.traffic && p.staticSecs ? p.nowSecs / p.staticSecs : 1 });
-  $('#dv-nav').addEventListener('click', () => setTimeout(begin, 50));   // the link opens Google Maps; Ticket Radar keeps watching
+  $('#dv-nav').addEventListener('click', () => setTimeout(begin, 50));   // the link opens Google Maps; Invictus Traffic Radar keeps watching
   $('#dv-start-only').onclick = () => { begin(); go('map'); };
   $('#dv-map').onclick = () => { const poly = drawRoute(p.route, p.start, p.end); go('map'); setTimeout(() => map.fitBounds(poly.getBounds(), { padding: [40, 40] }), 80); };
   $('#dv-saveroute').onclick = () => bus.emit('save-route', { start: p.start, end: p.end }, p.route);
@@ -224,10 +224,10 @@ export async function tripTick() {
 function calendar(p) {
   const f = (t) => new Date(t).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
   const leave = p.leaveAt || p.arriveBy - (p.nowSecs || 1200) * 1000;
-  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Ticket Radar//EN', 'BEGIN:VEVENT',
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Invictus Traffic Radar//EN', 'BEGIN:VEVENT',
     `UID:${p.id || uuid()}@ticket-radar`, `DTSTAMP:${f(Date.now())}`, `DTSTART:${f(leave)}`, `DTEND:${f(p.arriveBy)}`,
     `SUMMARY:Leave for ${String(p.name).replace(/[,;\\]/g, ' ')}`,
-    `DESCRIPTION:About ${mins(p.nowSecs || 0)} min drive. Check traffic in Ticket Radar before you go.\\n${googleNav(p.end)}`,
+    `DESCRIPTION:About ${mins(p.nowSecs || 0)} min drive. Check traffic in Invictus Traffic Radar before you go.\\n${googleNav(p.end)}`,
     `LOCATION:${String(p.end.label || '').replace(/[,;\\]/g, ' ')}`,
     'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Leave in 10 minutes', 'TRIGGER:-PT10M', 'END:VALARM',
     'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Time to leave', 'TRIGGER:PT0M', 'END:VALARM',
@@ -334,7 +334,7 @@ function etaMenu() {
     <p style="margin:0">${etaText(t)}</p>
     <div class="choice">
       <button data-m="share"><span class="ic" style="background:var(--you)">📍</span><span><b>${t.share ? 'Sharing your drive' : 'Share drive'}</b><small>${t.share ? 'Send the link again, or stop sharing' : 'Send a live link with your location and arrival time'}</small></span></button>
-      <a class="choicelink" href="${googleNav(t.dest)}" target="_blank" rel="noopener"><span class="ic" style="background:var(--ok)">🧭</span><span><b>Directions in Google Maps</b><small>Ticket Radar keeps watching while it's open</small></span></a>
+      <a class="choicelink" href="${googleNav(t.dest)}" target="_blank" rel="noopener"><span class="ic" style="background:var(--ok)">🧭</span><span><b>Directions in Google Maps</b><small>Invictus Traffic Radar keeps watching while it's open</small></span></a>
       <button data-m="park"><span class="ic" style="background:var(--surface2)">🅿️</span><span><b>Parking near ${esc(t.name)}</b><small>Garages and lots close to where you're going</small></span></button>
       <button data-m="end"><span class="ic" style="background:var(--danger)">✕</span><span><b>End trip</b><small>Stops the ETA and any sharing</small></span></button>
     </div>`, (s) => {

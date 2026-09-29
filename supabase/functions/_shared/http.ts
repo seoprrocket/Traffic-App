@@ -1,4 +1,4 @@
-// Shared plumbing for every Ticket Radar agent.
+// Shared plumbing for every Invictus Traffic Radar agent.
 import { createClient, type SupabaseClient, type User } from "jsr:@supabase/supabase-js@2";
 
 export const cors = {

@@ -78,7 +78,7 @@ export function renderFeed() {
 }
 function shareText(r) {
   const where = r.place && r.place !== 'My location' && r.place !== 'Pinned on map' ? r.place : 'this spot';
-  return `${rcat(r.type).e} ${r.type} near ${where} (${ago(r.time)})${r.note ? ': ' + r.note : ''}\nhttps://www.google.com/maps?q=${r.lat},${r.lng}\n— via Ticket Radar DC`;
+  return `${rcat(r.type).e} ${r.type} near ${where} (${ago(r.time)})${r.note ? ': ' + r.note : ''}\nhttps://www.google.com/maps?q=${r.lat},${r.lng}\n— via Invictus Traffic Radar`;
 }
 async function share(r) {
   const text = shareText(r);

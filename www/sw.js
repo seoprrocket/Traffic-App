@@ -1,6 +1,6 @@
 // Offline support: always try the network first (so updates show right away),
 // fall back to the last saved copy when there's no signal.
-const CACHE = 'ticket-radar-v4';
+const CACHE = 'invictus-radar-v5';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'icon.svg', 'css/app.css',
   'vendor/leaflet.css', 'vendor/leaflet.js', 'vendor/leaflet-heat.js', 'vendor/supabase.js',
@@ -33,7 +33,7 @@ self.addEventListener('fetch', (e) => {
 self.addEventListener('push', (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data && e.data.text() }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Ticket Radar', {
+  e.waitUntil(self.registration.showNotification(d.title || 'Invictus Traffic Radar', {
     body: d.body || '', icon: 'icon.svg', badge: 'icon.svg', tag: d.tag, renotify: !!d.tag,
     requireInteraction: !!d.requireInteraction, data: { url: d.url || './' },
   }));

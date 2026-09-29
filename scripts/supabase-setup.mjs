@@ -1,4 +1,4 @@
-// Sets up Supabase for Ticket Radar using the Supabase Management API.
+// Sets up Supabase for Invictus Traffic Radar using the Supabase Management API.
 // Runs inside the GitHub Action (.github/workflows/supabase.yml); no database password or terminal needed.
 //   node scripts/supabase-setup.mjs check | database | secrets | schedules
 import { readFileSync, appendFileSync } from 'node:fs';

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploys all Ticket Radar agents to your Supabase project.
+# Deploys all Invictus Traffic Radar agents to your Supabase project.
 # Run from the ticket-radar folder after `npx supabase login` and `npx supabase link --project-ref YOUR-REF`.
 # (The setup page at /setup.html shows these commands with your project filled in.)
 set -euo pipefail

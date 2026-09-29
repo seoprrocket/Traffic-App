@@ -9,7 +9,7 @@ import { summary } from './pages-main.js';
 import { pushState, enablePush, disablePush, testPush, pushTrip } from './netlify.js';
 
 const cfg = window.TR_CONFIG || {};
-const COMPANY = cfg.company || 'The Ticket Radar team';
+const COMPANY = cfg.company || 'The Invictus Traffic Radar team';
 const CONTACT = cfg.contactEmail || '[add your contact email in js/config.js]';
 
 // ---------------------------------------------------------------- Profile
@@ -146,7 +146,7 @@ export function renderExport() {
     trips: () => download(`trips-${d}.csv`, csv(S.db.trips, [['started', (t) => new Date(t.startedAt).toISOString()], ['ended', (t) => new Date(t.endedAt).toISOString()], ['miles', (t) => (t.meters / 1609.34).toFixed(1)], ['top_mph', (t) => t.maxMph], ['alerts', (t) => t.alerts], ['start', (t) => `${t.start.lat},${t.start.lng}`], ['end', (t) => `${t.end.lat},${t.end.lng}`]]), 'text/csv'),
     alerts: () => download(`alert-log-${d}.csv`, csv(S.db.alerts, [['time', (a) => new Date(a.time).toISOString()], ['kind', (a) => a.kind], ['title', (a) => a.title], ['detail', (a) => a.sub]]), 'text/csv'),
     reports: () => download(`reports-${d}.csv`, csv(S.db.reports, [['time', (r) => new Date(r.time).toISOString()], ['type', (r) => r.type], ['lat', (r) => r.lat], ['lng', (r) => r.lng], ['note', (r) => r.note], ['status', (r) => r.status]]), 'text/csv'),
-    json: () => { const { outbox, official, community, hotspots, ...rest } = S.db; download(`ticket-radar-backup-${d}.json`, JSON.stringify(rest, null, 2), 'application/json'); },
+    json: () => { const { outbox, official, community, hotspots, ...rest } = S.db; download(`invictus-traffic-radar-backup-${d}.json`, JSON.stringify(rest, null, 2), 'application/json'); },
   };
   $$('[data-x]', host).forEach((b) => (b.onclick = () => { X[b.dataset.x](); toast('Download started'); }));
   host.querySelector('#x-imp').onchange = (e) => importFile(e.target.files[0]);
@@ -160,7 +160,7 @@ function importFile(f) {
       const keepUser = S.db.syncedUser; replaceDb(d); S.db.syncedUser = null; persist();   // re-upload on next sync
       if (keepUser) syncNow();
       closeSheet(); toast('Backup restored');
-    } catch { toast('That file is not a Ticket Radar backup'); }
+    } catch { toast('That file is not a Invictus Traffic Radar backup'); }
   };
   rd.readAsText(f);
 }
@@ -222,7 +222,7 @@ export function openSettings() {
 const PUSH_TEXT = {
   on: 'On. This phone gets "time to leave" and parking meter notifications, even with the app closed.',
   off: 'Off. Turn on to be told when to leave for saved trips and before your parking meter runs out, even with the app closed.',
-  install: 'On iPhone, add Ticket Radar to your Home Screen first (Share → Add to Home Screen), then open it from there to turn notifications on.',
+  install: 'On iPhone, add Invictus Traffic Radar to your Home Screen first (Share → Add to Home Screen), then open it from there to turn notifications on.',
   unsupported: "This browser can't receive notifications. Saved trips still remind you while the app is open, and you can add them to your calendar.",
   server: 'Not set up on the site yet (setup page, step 2). Until then, trips remind you while the app is open, and you can add them to your calendar.',
   denied: 'Blocked for this site. Allow notifications for it in your phone or browser settings, then come back.',
@@ -265,7 +265,7 @@ const EFFECTIVE = 'September 29, 2026';
 export function renderPrivacy() {
   const host = $('#p-privacy');
   host.innerHTML = `${pageHead('Privacy Policy', 'Effective ' + EFFECTIVE)}<article class="card legal">
-    <p>${esc(COMPANY)} ("we") runs Ticket Radar. This policy explains what the app collects, why, and your choices.</p>
+    <p>${esc(COMPANY)} ("we") runs Invictus Traffic Radar. This policy explains what the app collects, why, and your choices.</p>
     <h3>What stays on your phone</h3>
     <p>If you don't sign in, everything you enter stays in your phone's browser storage or the app's storage. We never see it.</p>
     <h3>What we store when you sign in</h3>
@@ -299,7 +299,7 @@ export function renderPrivacy() {
 export function renderTerms() {
   const host = $('#p-terms');
   host.innerHTML = `${pageHead('Terms of Use', 'Effective ' + EFFECTIVE)}<article class="card legal">
-    <p>By using Ticket Radar you agree to these terms. If you don't agree, don't use the app.</p>
+    <p>By using Invictus Traffic Radar you agree to these terms. If you don't agree, don't use the app.</p>
     <h3>Drive safely and obey the law</h3>
     <p>Don't operate the app while driving in a way that takes your attention off the road. Set it up before you drive and use voice or hands-free features, or let a passenger operate it. You are responsible for following all traffic laws and posted signs. Some places restrict phone use while driving; follow those rules.</p>
     <h3>No guarantee</h3>

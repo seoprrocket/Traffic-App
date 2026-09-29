@@ -1,4 +1,4 @@
-// Shared helpers for Ticket Radar's Netlify Functions.
+// Shared helpers for Invictus Traffic Radar's Netlify Functions.
 import { getStore } from '@netlify/blobs';
 import { createHash, randomBytes } from 'node:crypto';
 

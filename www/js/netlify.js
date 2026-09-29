@@ -54,7 +54,7 @@ function b64ToBytes(s) {
 
 export async function enablePush() {
   const state = await pushState();
-  if (state === 'install') throw new Error('On iPhone, add Ticket Radar to your Home Screen first (Share → Add to Home Screen), then turn notifications on from there.');
+  if (state === 'install') throw new Error('On iPhone, add Invictus Traffic Radar to your Home Screen first (Share → Add to Home Screen), then turn notifications on from there.');
   if (state === 'unsupported') throw new Error("This browser can't receive notifications. Try Chrome, or add the app to your Home Screen.");
   if (state === 'server') throw new Error('Notifications aren\'t set up on the site yet. See step 2 of the setup page.');
   const perm = await Notification.requestPermission();

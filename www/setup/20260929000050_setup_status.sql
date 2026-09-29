@@ -1,4 +1,4 @@
--- Ticket Radar — status check for the setup dashboard (www/setup.html)
+-- Invictus Traffic Radar — status check for the setup dashboard (www/setup.html)
 -- Returns yes/no flags and counts only. It never returns secret values.
 -- To hide it after setup:  revoke execute on function public.setup_status() from anon;
 

@@ -1,4 +1,4 @@
--- Ticket Radar — Maryland coverage. Safe to run more than once.
+-- Invictus Traffic Radar — Maryland coverage. Safe to run more than once.
 
 -- Cameras from Maryland open data (Montgomery County sites, Prince George's County school zones)
 alter table public.cameras drop constraint if exists cameras_source_check;

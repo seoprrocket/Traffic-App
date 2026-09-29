@@ -1,4 +1,4 @@
--- Ticket Radar — database schema
+-- Invictus Traffic Radar — database schema
 -- Run once on a new Supabase project (SQL editor, or `supabase db push`).
 -- Everything a user creates is private to them by default (row level security).
 -- The community only ever sees the anonymized views at the bottom of this file.

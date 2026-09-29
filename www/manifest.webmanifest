@@ -1,6 +1,6 @@
 {
-  "name": "Ticket Radar",
-  "short_name": "Ticket Radar",
+  "name": "Invictus Traffic Radar",
+  "short_name": "Invictus Radar",
   "description": "Speed-camera and ticket-zone warnings for DC and Maryland drivers.",
   "start_url": "./",
   "display": "standalone",

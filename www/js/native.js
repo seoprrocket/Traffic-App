@@ -17,7 +17,7 @@ export async function watchLocation(cb, onError) {
   if (BG) {
     // Keeps running when the phone is locked or another app (like Maps) is in front
     const id = await BG.addWatcher({
-      backgroundTitle: 'Ticket Radar is watching for cameras',
+      backgroundTitle: 'Invictus Traffic Radar is watching for cameras',
       backgroundMessage: 'Drive mode is on. Tap to open.',
       requestPermissions: true, stale: false, distanceFilter: 8,
     }, (loc, err) => {
