@@ -59,13 +59,22 @@ jobs:
       - name: Deploy the AI agents
         if: steps.check.outputs.ready == 'true'
         run: |
-          set -e
-          for fn in scan-ticket voice-assist dispute-helper delete-account; do
-            supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF" --use-api
-          done
-          for fn in camera-sync moderate-report commute-predict weekly-coach health; do
-            supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt
-          done
+          failed=""
+          deploy() {
+            fn="$1"; shift
+            if out=$(supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF" --use-api "$@" 2>&1); then
+              echo "$out"; echo "✅ $fn" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "$out"
+              # Show the error as an annotation so it's readable on the run page (and through the API)
+              msg=$(echo "$out" | tail -n 25 | sed ':a;N;$!ba;s/\n/%0A/g')
+              echo "::error title=Deploy $fn failed::$msg"
+              echo "❌ $fn" >> "$GITHUB_STEP_SUMMARY"; failed="$failed $fn"
+            fi
+          }
+          for fn in scan-ticket voice-assist dispute-helper delete-account; do deploy "$fn"; done
+          for fn in camera-sync moderate-report commute-predict weekly-coach health; do deploy "$fn" --no-verify-jwt; done
+          if [ -n "$failed" ]; then echo "Failed:$failed"; exit 1; fi
           echo "✅ AI agents deployed" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Install schedules and load cameras
