@@ -28,7 +28,7 @@ async function getJson(url, params) {
 export const titleCase = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim()
   .replace(/\b([a-z])/g, (c) => c.toUpperCase()).replace(/\b(Nw|Ne|Sw|Se|Dc|Rpp|Dpw)\b/g, (x) => x.toUpperCase());
 const cleanBlock = (s) => titleCase(String(s || '').replace(/\*+$/, '').trim()
-  .replace(/\b(NORTH|SOUTH|EAST|WEST)\s+(S|SI|SID|SIDE)\s*$/i, (m, d) => `(${d.toLowerCase()} side)`)
+  .replace(/\b(NORTH|SOUTH|EAST|WEST)(?:\s+(?:S|SI|SID|SIDE))?\s*$/i, (m, d) => `(${d.toLowerCase()} side)`)
   // the city cuts locations at 32 characters: drop a half-written side ("NW EA", "NW NORT")
   .replace(/(\b(?:NW|NE|SW|SE))\s+[NSEW][A-Z]{0,4}(?:\s+S[A-Z]*)?$/i, '$1'));
 
