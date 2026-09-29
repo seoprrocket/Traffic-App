@@ -72,7 +72,7 @@ export function csv(rows, cols) {
   return [cols.map((c) => q(c[0])).join(','), ...rows.map((r) => cols.map((c) => q(c[1](r))).join(','))].join('\n');
 }
 export async function copyText(text) {
-  try { await navigator.clipboard.writeText(text); toast('Copied'); return true; }
+  try { await navigator.clipboard.writeText(text); toast('Copied. Paste it into a text or chat.'); return true; }
   catch { toast('Copy failed. Press and hold the text to copy it.'); return false; }
 }
 

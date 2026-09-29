@@ -1,6 +1,16 @@
-# Used when Netlify deploys from GitHub (not needed for drag-and-drop).
+# Used when Netlify deploys from GitHub. Drag-and-drop deploys skip the functions
+# (live traffic, "time to leave" notifications, Share drive), so deploy from GitHub.
 # Set these in Netlify → Site configuration → Environment variables, and config.js is written for you:
 #   SUPABASE_URL, SUPABASE_ANON_KEY, TR_COMPANY, TR_CONTACT_EMAIL
 [build]
   publish = "www"
   command = "node scripts/write-config.mjs"
+
+# Optional features (Site configuration → Environment variables):
+#   GOOGLE_MAPS_API_KEY   live traffic for Plan a Drive (Google Routes API)
+#   GOOGLE_DAILY_LIMIT    max Google calls per day (default 400)
+#   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT   phone notifications (setup.html generates them)
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"

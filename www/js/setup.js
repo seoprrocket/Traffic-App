@@ -71,6 +71,7 @@ async function checkSite() {
 async function checkAll() {
   const btn = $('#checkAll'); btn.disabled = true; btn.textContent = 'Checking…';
   R.site = await checkSite();
+  try { const r = await fetch('/api/trips', { cache: 'no-store' }); R.api = r.ok ? await r.json() : { ok: false }; } catch { R.api = { ok: false }; }
   R.conn = R.status = R.health = null;
   if (urlInfo(S.url).ok && keyInfo(S.key).ok) {
     const c = await jfetch(`${base()}/rest/v1/cameras?select=id&limit=1`, { headers: hdrs() });
@@ -145,12 +146,34 @@ function steps() {
       ${links([['Netlify Drop', 'https://app.netlify.com/drop'], ['Your Netlify sites', 'https://app.netlify.com/']])}` });
   }
 
-  // 2. Supabase project
+  // 2. Netlify Functions: live traffic, notifications, Share drive
+  {
+    const a = R.api || {};
+    const state = !R.ran ? 'unknown' : !a.ok ? 'todo' : a.traffic && a.push ? 'done' : 'warn';
+    const v = S.vapid;
+    out.push({ title: 'Live traffic & notifications', sub: 'Netlify Functions: Plan a Drive traffic, "time to leave", Share drive', state, html: `
+      <ul class="checks">
+        ${check(R.ran ? !!a.ok : null, 'Functions are deployed', a.ok ? '' : 'They deploy automatically when Netlify builds from your GitHub repo. Drag-and-drop deploys skip them.')}
+        ${check(R.ran && a.ok ? (a.traffic ? true : 'maybe') : null, 'Live traffic (Google)', a.traffic ? '' : 'Optional. Without it, Plan a Drive uses typical drive times plus 20%.')}
+        ${check(R.ran && a.ok ? (a.push ? true : 'maybe') : null, 'Phone notifications', a.push ? '' : 'Add the three VAPID values below.')}
+        ${check(R.ran && a.ok ? true : null, 'Share drive links', 'Work as soon as the functions are deployed.')}
+      </ul>
+      <p class="small" style="margin:0"><b>1. Notification keys.</b> Press the button to make a key pair in this browser, then add all three lines in Netlify → Site configuration → Environment variables. Keep the private key secret.</p>
+      <div class="btns"><button class="btn" data-act="vapid">${v ? 'Make new keys' : 'Make notification keys'}</button></div>
+      ${v ? code('vapid-env', 'Netlify environment variables', `VAPID_PUBLIC_KEY=${v.pub}\nVAPID_PRIVATE_KEY=${v.priv}\nVAPID_SUBJECT=mailto:${S.contact || 'you@yourdomain.com'}`) : ''}
+      <p class="small" style="margin:0"><b>2. Live traffic (optional).</b> In Google Cloud: create a project and turn on billing (Google includes free monthly usage), enable the <b>Routes API</b>, create an API key, and restrict it to the Routes API. Then add it in Netlify:</p>
+      ${code('google-env', 'Netlify environment variables', 'GOOGLE_MAPS_API_KEY=your-key-here\nGOOGLE_DAILY_LIMIT=400')}
+      <p class="note small" style="margin:0">GOOGLE_DAILY_LIMIT caps Google calls per day to protect your bill; after that the app falls back to typical times. Checking one planned drive uses up to 5 calls, and each saved trip uses a few more on the day.</p>
+      ${links([['Routes API', 'https://console.cloud.google.com/apis/library/routes.googleapis.com'], ['API keys', 'https://console.cloud.google.com/apis/credentials'], ['Billing & budgets', 'https://console.cloud.google.com/billing'], ['Netlify sites', 'https://app.netlify.com/']])}
+      <p class="small" style="margin:0"><b>3.</b> In Netlify, open <b>Deploys → Trigger deploy</b> so the new variables take effect, then press <b>Check everything</b>.</p>` });
+  }
+
+  // 3. Supabase project
   {
     const ui = urlInfo(S.url), ki = keyInfo(S.key);
     const state = !(ui.ok && ki.ok) ? 'todo' : !R.ran ? 'unknown' : conn?.reach && conn?.keyOk ? 'done' : 'todo';
     const msg = !R.ran || !(ui.ok && ki.ok) ? '' : !conn?.reach ? "Couldn't reach that URL. Check it's the Project URL, and that the project isn't paused." : !conn?.keyOk ? `Supabase rejected the key${conn.msg ? ': ' + esc(conn.msg) : ''}.` : '';
-    out.push({ title: 'Connect your Supabase project', sub: ref() ? `Project ${ref()}` : 'Project URL and public key', state, html: `
+    out.push({ title: 'Connect Supabase', sub: ref() ? `Project ${ref()}` : 'Accounts, sync, community reports and AI', state, html: `
       <ol class="small"><li>Create a free project at supabase.com. Pick the US East region.</li><li>Open Project Settings → API and copy the <b>Project URL</b> and the <b>anon</b> (or <b>publishable</b>) key.</li></ol>
       ${links([['Supabase projects', 'https://supabase.com/dashboard/projects'], ['API settings', dash('settings/api')]])}
       <label class="f">Project URL<input type="text" id="in-url" value="${esc(S.url)}" placeholder="https://abcdefghijklmnopqrst.supabase.co" autocomplete="off" spellcheck="false"></label>
@@ -162,14 +185,18 @@ function steps() {
 
   // 3. Database
   {
-    const state = !R.ran || !conn?.keyOk ? (conn?.keyOk === false ? 'todo' : 'unknown') : conn.tables && st ? 'done' : conn.tables ? 'warn' : 'todo';
+    const md = !!st?.maryland && !!st?.hazards;
+    const state = !R.ran || !conn?.keyOk ? (conn?.keyOk === false ? 'todo' : 'unknown') : conn.tables && st && md ? 'done' : conn.tables ? 'warn' : 'todo';
     out.push({ title: 'Build the database', sub: 'Tables, security rules and the status check', state, html: `
       <ul class="checks">
         ${check(R.ran && conn?.keyOk ? !!conn.tables : null, 'Ticket Radar tables exist')}
         ${check(R.ran && conn?.keyOk ? !!st : null, 'Setup status check installed', st ? '' : 'Included in the copy below.')}
+        ${check(R.ran && conn?.keyOk && st ? !!st.maryland : null, 'Maryland cameras enabled')}
+        ${check(R.ran && conn?.keyOk && st ? !!st.hazards : null, 'New hazard types (accidents, potholes, flooding, emergency vehicles)')}
+        ${R.ran && conn?.tables && st && !md ? '<li class="c-maybe"><span>Your database was built before these were added. Press "Copy database updates", run it, and check again.</span></li>' : ''}
       </ul>
       <ol class="small"><li>Press <b>Copy database SQL</b>.</li><li>Open the SQL editor, paste, and press Run. It takes a few seconds.</li><li>Come back and press <b>Check everything</b>.</li></ol>
-      <div class="btns"><button class="btn primary" data-act="copy-db">Copy database SQL</button></div>
+      <div class="btns"><button class="btn primary" data-act="copy-db">Copy database SQL</button>${conn?.tables && !md ? '<button class="btn" data-act="copy-md">Copy database updates</button>' : ''}</div>
       ${links([['SQL editor', dash('sql/new')]])}
       <p class="note small" style="margin:0">Run it only once on a new project. If it says a table already exists, that part is done.</p>` });
   }
@@ -215,8 +242,9 @@ function steps() {
     const jobs = (st?.cron_jobs || []).map((j) => j.name);
     const jobsOk = JOBS.every((j) => jobs.includes(j));
     const camsDC = st?.cameras?.dc_open_data || 0;
+    const camsMD = st?.cameras?.md_open_data || 0;
     const hashOk = hl?.cron_hash && st?.cron_hash ? hl.cron_hash === st.cron_hash : null;
-    const items = [!!hl, nf === FNS.length, hl?.anthropic === 'ok', !!sec.CRON_SECRET, !!(st?.vault_project_url && st?.vault_cron_secret), hashOk === true, jobsOk, camsDC > 0];
+    const items = [!!hl, nf === FNS.length, hl?.anthropic === 'ok', !!sec.CRON_SECRET, !!(st?.vault_project_url && st?.vault_cron_secret), hashOk === true, jobsOk, camsDC > 0 && camsMD > 0];
     const n = items.filter(Boolean).length;
     const state = !R.ran || !conn?.keyOk ? 'unknown' : n === items.length ? 'done' : n > 0 ? 'warn' : 'todo';
     const on = R.ran && conn?.keyOk;
@@ -229,7 +257,7 @@ function steps() {
         ${check(on ? !!(st?.vault_project_url && st?.vault_cron_secret) : null, 'Database can call the agents', 'Run the Vault SQL below.')}
         ${check(on && hashOk !== null ? hashOk : null, 'Both copies of the scheduler secret match', hashOk === false ? 'They differ. Run the terminal "secrets set" line and the Vault SQL again, both from this page.' : '')}
         ${check(on ? jobsOk : null, 'Schedules installed', jobsOk ? '' : 'Run the schedules SQL below (after the Vault SQL).')}
-        ${check(on ? camsDC > 0 : null, 'Official cameras loaded', camsDC ? `${camsDC} DC cameras` : 'Run "Load cameras now" below once everything above is set.')}
+        ${check(on ? (camsDC > 0 && camsMD > 0 ? true : camsDC || camsMD ? 'maybe' : false) : null, 'Official cameras loaded', camsDC || camsMD ? `${camsDC} DC · ${camsMD} Maryland${camsMD ? '' : ' (run the Maryland update in step 3, redeploy camera-sync, then load cameras again)'}` : 'Run "Load cameras now" below once everything above is set.')}
         ${check(on && hl ? (sec.RESEND_API_KEY && sec.RESEND_FROM ? true : 'maybe') : null, 'Weekly coach email (optional)', sec.RESEND_API_KEY ? '' : 'Set RESEND_API_KEY and RESEND_FROM to email the Monday review.')}
       </ul>
       <p class="small" style="margin:0"><b>1. In a terminal</b>, from the unzipped ticket-radar folder. Replace <span class="mono">sk-ant-YOUR-KEY</span> with your key from console.anthropic.com. The scheduler secret was made for you in this browser; keep it private.</p>
@@ -254,12 +282,12 @@ function healthHtml() {
       <div class="kpi"><small>Reports stuck in review</small><b>${st.reports_waiting ?? 0}</b></div>
     </div>
     ${st.reports_waiting ? '<p class="small bad">Reports are waiting on the moderator. Check the moderate-report logs and step 6.</p>' : ''}
-    ${cams.length ? `<p class="small">By source: ${cams.map(([k, n]) => `${esc(k.replace('dc_open_data', 'DC open data').replace('agent', 'county pages'))} ${n}`).join(' · ')}</p>` : ''}
+    ${cams.length ? `<p class="small">By source: ${cams.map(([k, n]) => `${esc(k.replace('dc_open_data', 'DC open data').replace('md_open_data', 'Maryland open data').replace('agent', 'county pages'))} ${n}`).join(' · ')}</p>` : ''}
     <h3>Camera sources</h3><div class="scroll"><table class="tbl"><thead><tr><th>Source</th><th>Last run</th><th>Result</th></tr></thead><tbody>
       ${(st.camera_sources || []).map((c) => `<tr><td>${esc(c.jurisdiction)}${c.enabled ? '' : ' (off)'}</td><td>${fmt(c.last_run_at)}</td><td>${esc(c.last_result || '—')}</td></tr>`).join('')}</tbody></table></div>
     ${st.cron_jobs ? `<h3>Schedules</h3><div class="scroll"><table class="tbl"><thead><tr><th>Job</th><th>Last run</th><th>Status</th></tr></thead><tbody>
       ${st.cron_jobs.map((j) => `<tr><td>${esc(j.name)}</td><td>${fmt(j.last_run)}</td><td class="${j.last_status === 'failed' ? 'bad' : ''}">${esc(j.last_status || '—')}</td></tr>`).join('')}</tbody></table></div>` : ''}
-    <p class="note small">Add more county camera pages with: <span class="mono">insert into camera_sources (jurisdiction, url) values ('Prince George''s County, MD', 'https://…');</span></p>`;
+    <p class="note small">Add more county or town camera pages with: <span class="mono">insert into camera_sources (jurisdiction, url) values ('Rockville, MD', 'https://…');</span></p>`;
 }
 
 // ---------------------------------------------------------------- render
@@ -295,8 +323,10 @@ document.addEventListener('click', async (e) => {
     if (!ki.ok) { toast(ki.danger ? "That key must not go in the app." : ki.msg); render(); return; }
     await checkAll();
   } else if (act === 'copy-db') {
-    try { const sql = (await sqlFile('20260929000000_init.sql')) + '\n\n' + (await sqlFile('20260929000050_setup_status.sql')); copyText(sql); }
+    try { const sql = [await sqlFile('20260929000000_init.sql'), await sqlFile('20260929000050_setup_status.sql'), await sqlFile('20260929000200_maryland.sql'), await sqlFile('20260929000300_hazards.sql')].join('\n\n'); copyText(sql); }
     catch { toast("Couldn't load the SQL files. Upload the whole www folder, including www/setup."); }
+  } else if (act === 'copy-md') {
+    try { copyText([await sqlFile('20260929000050_setup_status.sql'), await sqlFile('20260929000200_maryland.sql'), await sqlFile('20260929000300_hazards.sql')].join('\n\n')); } catch { toast("Couldn't load the SQL file. Upload the whole www folder."); }
   } else if (act === 'copy-sched') {
     try { copyText(await sqlFile('20260929000100_schedules.sql')); } catch { toast("Couldn't load the SQL file. Upload the whole www folder."); }
   } else if (act === 'dl-config') {
@@ -307,6 +337,15 @@ document.addEventListener('click', async (e) => {
     toast('This device is connected. Open the app to sign in.'); await checkAll();
   } else if (act === 'stop-device') {
     localStorage.removeItem('tr.config'); toast('This device is back to the live settings'); await checkAll();
+  } else if (act === 'vapid') {
+    try {
+      const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+      const raw = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey));
+      const jwk = await crypto.subtle.exportKey('jwk', kp.privateKey);
+      const b64u = (u8) => btoa(String.fromCharCode(...u8)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      S.vapid = { pub: b64u(raw), priv: jwk.d }; keep(); render();
+      toast('Keys made. Copy them into Netlify.');
+    } catch { toast("This browser couldn't make keys. Try Chrome."); }
   } else if (act === 'new-secret') {
     S.cronSecret = hex(24); keep(); render(); toast('New secret made. Run the terminal "secrets set" line and the Vault SQL again.');
   }

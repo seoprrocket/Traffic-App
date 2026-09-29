@@ -14,3 +14,7 @@
 /setup.html
   X-Robots-Tag: noindex
   Cache-Control: no-cache
+
+/share.html
+  X-Robots-Tag: noindex
+  Referrer-Policy: no-referrer

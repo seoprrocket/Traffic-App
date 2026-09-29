@@ -1,11 +1,13 @@
 // Voice co-pilot and the hands-free driving screen.
 import { S } from './store.js';
-import { $, esc, fmtDist, toast } from './util.js';
-import { E, startDrive, stopDrive, aheadSummary, limitSummary } from './engine.js';
+import { $, esc, fmtDist, toast, bus } from './util.js';
+import { etaSummary } from './trip.js';
+import { E, startDrive, stopDrive, aheadSummary, limitSummary, overBy } from './engine.js';
 import { listen, canListen, speak, locateOnce, vibrate } from './native.js';
 import { postReport, undoReport, go } from './ui.js';
 import { agent } from './cloud.js';
 import { rcat } from './mapview.js';
+import { HAZARDS } from './reports.js';
 
 // ---------------------------------------------------------------- understanding simple commands on the phone
 const REPORT_WORDS = [
@@ -15,7 +17,12 @@ const REPORT_WORDS = [
   [/\b(speed trap|radar|trooper|cop|cops|police|cruiser)\b/, 'Speed trap / police'],
   [/\b(officer|officers)\b/, 'Officer location'],
   [/\b(new camera|speed camera|camera van|camera)\b/, 'New camera'],
-  [/\b(accident|crash|debris|pothole|hazard|stalled|construction|flood|flooding|tree down)\b/, 'Road hazard'],
+  [/\b(ambulance|fire truck|firetruck|emergency vehicle|paramedics?)\b/, 'Emergency vehicle'],
+  [/\b(accident|crash|wreck|collision|fender bender)\b/, 'Accident'],
+  [/\b(pothole|potholes)\b/, 'Pothole'],
+  [/\b(debris|something in the road|object in the road|tire in the road|ladder)\b/, 'Debris'],
+  [/\b(flood|flooded|flooding|high water|standing water)\b/, 'Flooding'],
+  [/\b(hazard|stalled|broken down|construction|tree down|lane closed)\b/, 'Road hazard'],
 ];
 function understand(raw) {
   const t = raw.toLowerCase().trim();
@@ -23,6 +30,9 @@ function understand(raw) {
   if (/(start|begin) (driving|drive|drive mode)|drive mode on/.test(t)) return { action: 'start_drive' };
   if (/(stop|end) (driving|drive|drive mode)|drive mode off/.test(t)) return { action: 'stop_drive' };
   if (/speed limit|how fast can i|what'?s the limit/.test(t)) return { speech: limitSummary() };
+  if (/\b(share (my )?(drive|trip|location|eta)|send my eta)\b/.test(t)) return { action: 'share_drive' };
+  if (/\b(find|where can i) park(ing)?\b|\bparking near\b/.test(t)) return { action: 'find_parking' };
+  if (/\b(when will i (get there|arrive)|what'?s my eta|how long (until|till) i)\b/.test(t)) return { speech: etaSummary() };
   if (/(what'?s|anything|any cameras?|anything) (ahead|coming up|up ahead)|next camera/.test(t)) return { speech: aheadSummary() };
   if (/\b(report|there'?s|i see|spotted|seeing)\b/.test(t)) {
     const hit = REPORT_WORDS.find(([re]) => re.test(t));
@@ -69,9 +79,24 @@ export async function voiceCommand() {
     if (r.action === 'start_drive') { await startDrive(); return; }
     if (r.action === 'stop_drive') { stopDrive(); speak('Drive mode off.'); return; }
     if (r.action === 'report') { await doReport(r.report_type || 'Other', r.report_note); return; }
+    if (r.action === 'share_drive') { bus.emit('share-drive'); return; }
+    if (r.action === 'find_parking') { bus.emit('go', 'parking'); return; }
     if (r.speech) speak(r.speech);
   } catch (e) { toast(e.message || 'Voice failed'); }
   finally { listening = false; document.body.classList.remove('listening'); }
+}
+
+// ---------------------------------------------------------------- one-tap hazard picker (big buttons)
+function hazardPicker() {
+  document.querySelector('.hzpick')?.remove();
+  const el = document.createElement('div'); el.className = 'hzpick'; el.setAttribute('role', 'dialog');
+  el.innerHTML = `<div class="hzgrid">${HAZARDS.map((t) => `<button data-t="${esc(t)}"><span>${rcat(t).e}</span>${esc(t)}</button>`).join('')}</div><button class="hzcancel">Cancel</button>`;
+  el.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-t]');
+    if (b) { el.remove(); doReport(b.dataset.t); } else if (e.target.closest('.hzcancel') || e.target === el) el.remove();
+  });
+  document.body.appendChild(el);
+  setTimeout(() => el.isConnected && el.remove(), 12000);
 }
 
 // ---------------------------------------------------------------- hands-free screen
@@ -86,7 +111,7 @@ export function paintHandsFree() {
   $('#hf-speed').textContent = E.driving ? mph : '–';
   const lim = E.limitHere;
   $('#hf-limit').hidden = !lim; $('#hf-limit b').textContent = lim || '';
-  hf.classList.toggle('over', !!lim && mph > lim + 1);
+  hf.classList.toggle('over', !!lim && mph > lim + (overBy() ?? 1));
   const n = E.next;
   $('#hf-next').innerHTML = !E.driving ? '<span class="muted">Drive mode is off</span>'
     : n ? `<b>${esc(n.label)}</b><span>${fmtDist(n.d)} ahead · ${n.eta < 1 ? 'under a minute' : '~' + Math.round(n.eta) + ' min'}${n.limit ? ' · limit ' + n.limit : ''}</span><small>${esc(n.name || '')}</small>`
@@ -95,7 +120,7 @@ export function paintHandsFree() {
 export function setupHandsFree() {
   $('#hf-voice').onclick = voiceCommand;
   $('#hf-police').onclick = () => doReport('Speed trap / police');
-  $('#hf-hazard').onclick = () => doReport('Road hazard');
+  $('#hf-hazard').onclick = hazardPicker;
   $('#hf-map').onclick = () => { showHandsFree(false); go('map'); };
   $('#hf-stop').onclick = () => { stopDrive(); showHandsFree(false); };
 }

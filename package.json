@@ -2,15 +2,17 @@
   "name": "ticket-radar",
   "version": "3.0.0",
   "private": true,
-  "description": "Ticket Radar DC \u2014 speed-camera and ticket-zone warnings",
+  "description": "Ticket Radar DC — speed-camera and ticket-zone warnings",
   "scripts": {
     "vendor": "node scripts/vendor.mjs",
     "serve": "npx --yes http-server www -p 8080 -c-1"
   },
   "dependencies": {
+    "@netlify/blobs": "^11.1.1",
     "@supabase/supabase-js": "2.117.2",
     "leaflet": "1.9.4",
-    "leaflet.heat": "0.2.0"
+    "leaflet.heat": "0.2.0",
+    "web-push": "^3.6.7"
   },
   "engines": {
     "node": ">=22"

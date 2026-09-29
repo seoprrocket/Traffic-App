@@ -1,7 +1,8 @@
 // Supabase: sign-in, sync, community data and the AI agents.
 // If no Supabase project is configured, the app runs fully on the phone.
 import { S, persist, save, queue, normalize } from './store.js';
-import { bus, toast, parseHeading, scrub } from './util.js';
+import { bus, toast, scrub } from './util.js';
+import { loadAllPublic, loadMoCo, loadPG } from './sources.js';
 
 // The setup page can connect just this device before config.js is deployed ("Use on this device")
 let override = null;
@@ -159,16 +160,14 @@ export async function saveProfile() {
   }).eq('id', S.user.id);
 }
 
-// ---------------------------------------------------------------- official cameras
-const DC_LAYER = 'https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Public_Safety_WebMercator/MapServer/43/query';
-const KIND = { 'Speed': 'Speed', 'Red Light': 'Red light', 'Stop Sign': 'Stop sign', 'Truck Restriction': 'Truck', 'Bus Lane': 'Bus lane' };
+// ---------------------------------------------------------------- official cameras (DC + Maryland)
 export async function loadOfficialCameras(force) {
   if (!force && Date.now() - S.db.officialAt < 20 * 3600e3 && S.db.official.length) return;
   let list = null;
   try {
     if (sb) {
       list = [];
-      for (let from = 0; from < 10000; from += 1000) {
+      for (let from = 0; from < 20000; from += 1000) {
         const { data, error } = await sb.from('cameras').select('id,name,lat,lng,kind,speed_limit,heading,verified,source,jurisdiction')
           .is('owner_id', null).eq('status', 'active').order('id').range(from, from + 999);
         if (error) throw error;
@@ -176,22 +175,15 @@ export async function loadOfficialCameras(force) {
           verified: c.verified, source: c.source, jurisdiction: c.jurisdiction, official: true })));
         if (data.length < 1000) break;
       }
-      if (!list.length) list = null;   // backend not seeded yet → fall back to DC directly
-    }
-    if (!list) {
-      list = [];
-      for (let off = 0; off < 5000; off += 1000) {
-        const r = await fetch(`${DC_LAYER}?where=1%3D1&outFields=GLOBALID,ENFORCEMENT_TYPE,LOCATION_DESCRIPTION,SPEED_LIMIT,DEVICE_MOBILITY,ACTIVE_STATUS,CAMERA_LATITUDE,CAMERA_LONGITUDE&returnGeometry=false&orderByFields=OBJECTID&resultOffset=${off}&resultRecordCount=1000&f=json`);
-        const js = await r.json();
-        for (const { attributes: a } of js.features || []) {
-          if (a.CAMERA_LATITUDE == null || (a.ACTIVE_STATUS && !/active/i.test(a.ACTIVE_STATUS))) continue;
-          list.push({ id: 'dc-' + a.GLOBALID, name: String(a.LOCATION_DESCRIPTION || 'DC camera').trim() + (/mobile/i.test(a.DEVICE_MOBILITY || '') ? ' (mobile)' : ''),
-            lat: a.CAMERA_LATITUDE, lng: a.CAMERA_LONGITUDE, kind: KIND[a.ENFORCEMENT_TYPE] || a.ENFORCEMENT_TYPE || 'Speed',
-            limit: a.SPEED_LIMIT ? Math.round(a.SPEED_LIMIT) : null, heading: parseHeading(a.LOCATION_DESCRIPTION), verified: true, source: 'dc_open_data', jurisdiction: 'Washington, DC', official: true });
-        }
-        if ((js.features || []).length < 1000) break;
+      if (!list.length) list = null;   // backend not seeded yet: load the public lists directly
+      else if (!list.some((c) => c.source === 'md_open_data')) {
+        // backend has DC only (Maryland update not run yet): add Maryland straight from the counties
+        const md = await Promise.allSettled([loadMoCo(), loadPG()]);
+        list.push(...md.flatMap((r) => (r.status === 'fulfilled' ? r.value : [])));
       }
     }
+    if (!list) list = await loadAllPublic();
+    if (!list.length) return;          // every source failed: keep what we had
     S.db.official = list; S.db.officialAt = Date.now(); save();
   } catch (e) { console.warn('official cameras unavailable:', e?.message || e); }
 }

@@ -5,19 +5,8 @@ import { esc, money, ago, DC, headingName, bus } from './util.js';
 export const TILE = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 export const ATTR = '© OpenStreetMap';
 
-export const RCAT = {
-  'Speed trap / police': { e: '🚓', g: 'police', c: '#3b5bdb' },
-  'Officer location': { e: '👮', g: 'police', c: '#3b5bdb' },
-  'Immigration enforcement (ICE)': { e: '🚨', g: 'ice', c: '#c2255c' },
-  'Checkpoint': { e: '🛑', g: 'police', c: '#3b5bdb' },
-  'New camera': { e: '📷', g: 'camera', c: '#d99100' },
-  'Ticket hotspot': { e: '⚠️', g: 'hotspot', c: '#d42a2a' },
-  'Icy road': { e: '🧊', g: 'hazard', c: '#1690b0' },
-  'Road hazard': { e: '🚧', g: 'hazard', c: '#e8590c' },
-  'Other': { e: '📣', g: 'other', c: '#7447d1' },
-};
-export const RTYPES = Object.keys(RCAT);
-export const rcat = (t) => RCAT[t] || RCAT.Other;
+export { RCAT, RTYPES, rcat } from './reports.js';
+import { rcat } from './reports.js';
 
 export const pin = (color, emoji) => L.divIcon({ className: '', html: `<div class="m-pin" style="background:${color}"><span>${emoji}</span></div>`, iconSize: [34, 34], iconAnchor: [17, 34], popupAnchor: [0, -30] });
 export const icons = { ticket: pin('#d42a2a', '⚠️'), camera: pin('#d99100', '📷'), temp: pin('#1d6cf0', '📍') };

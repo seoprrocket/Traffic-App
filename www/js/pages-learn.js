@@ -74,22 +74,34 @@ const LIB = [
     'DC uses automated cameras for speeding, red lights, stop signs, blocked intersections and crosswalks, and bus lanes. Some are fixed on poles; others are in parked vans that move.',
     'Camera tickets are mailed to the registered owner of the car, usually a few weeks after the violation.',
     'DC publishes where its enforcement cameras are. This app loads that list automatically, so those cameras warn you without pinning.']],
+  ['How Maryland camera enforcement works', [
+    'Maryland speed cameras are mostly in school zones and highway work zones, plus a growing number on residential streets in some counties.',
+    'A Maryland speed camera only issues a ticket when you are going at least 12 mph over the limit. That is not a cushion to drive at: officers can stop you at any speed over.',
+    'School-zone speed cameras generally run on weekdays from 6 am to 8 pm, all year, including summer. Check the posted sign for each zone.',
+    'Since October 2025, Maryland speed camera fines rise with your speed: $40 at 12–15 mph over, then $70, $120 and $230, up to $425 at 40 mph or more over.',
+    'SafeZones work-zone cameras move between highway work zones such as I-95, I-495 and I-270, so they aren\'t on any fixed list. Slow down whenever you see work-zone signs.',
+    'This app loads Montgomery County\'s camera sites and Prince George\'s County\'s school speed zones automatically. Other counties and towns are added from their web pages when the backend is connected; pin any camera the lists miss.',
+    'In Maryland, camera tickets are handled by the county or town that issued them. The notice explains how to pay or ask for a court date.']],
   ['Speeding', [
     'Many DC neighborhood streets are posted at 20 or 25 mph. If you have not seen a sign, assume the lower number.',
-    'Limits drop in school zones during posted hours and in work zones. Both are common camera locations in DC, Maryland and Virginia.',
+    'Limits drop in school zones during posted hours and in work zones. Both are common camera locations in DC and Maryland.',
     'Speed creeps up on downhill stretches and wide, empty roads. Check your speedometer at the top of every hill near a known camera.',
     'Use cruise control or a speed limiter on highways and parkways that have cameras.']],
   ['Red lights and right turns', [
     'A growing number of DC intersections prohibit right turns on red. Look for the sign every time before you turn.',
     'When you do turn right on red, come to a full stop first. Rolling turns are a common camera violation.',
     'On a stale green near a camera, ease off early so you can stop on yellow without braking hard.']],
+  ['Emergency vehicles and crashes', [
+    'Maryland law requires you to move over a lane when you pass a stopped emergency, tow or service vehicle with flashing lights, or to slow down if you can\'t move over safely. Do the same in DC.',
+    'Pull to the right and stop for an emergency vehicle coming toward you or behind you with lights and siren, unless you\'re in an intersection.',
+    'Reporting a crash or emergency vehicle in the app warns other drivers for about 30 to 90 minutes. Only report what you see, and never while typing at the wheel: use voice or the big Hazard button.']],
   ['Stop signs, crosswalks and bus lanes', [
     'Stop fully behind the line until the car stops moving, then proceed.',
     'Do not enter an intersection or crosswalk unless you can clear it before the light changes.',
     'Red-painted lanes are for buses during posted hours. Driving or stopping in them can be ticketed.']],
   ['If you get a ticket', [
     'Read the notice right away. It lists the violation, the fine and the deadline to pay or dispute.',
-    'In DC you pay or contest camera tickets through the DC DMV. Missing the deadline can add penalties.',
+    'In DC you pay or contest camera tickets through the DC DMV. In Maryland, follow the instructions from the county or town on the notice. Missing the deadline can add penalties.',
     'Scan it into this app the same day. The spot gets a caution alert, and Dispute help can walk you through your options.']],
   ['Using this app safely', [
     'Set everything up before you drive. Use hands-free mode and voice while moving.',

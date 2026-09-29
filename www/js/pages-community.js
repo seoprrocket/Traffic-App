@@ -1,12 +1,12 @@
 // Community Map, Reporting Feed, My Contributions, Risk Heatmap.
-import { S, save, activeReports, LIVE_MS, upsertLocal, queue } from './store.js';
+import { S, save, activeReports, reportLive, upsertLocal, queue } from './store.js';
 import { $, $$, esc, dist, fmtDist, ago, stamp, fineRange, streetKey, DC, toast, copyText } from './util.js';
 import { TILE, ATTR, rcat, reportIcon, reportPopup, youIcon } from './mapview.js';
 import { E } from './engine.js';
 import { pageHead, bindBack, reportForm, confirmDel, go } from './ui.js';
 import { loadCommunity, vote, flush } from './cloud.js';
 
-export const CGROUPS = [['police', '🚓 Police & officers'], ['ice', '🚨 ICE activity'], ['hazard', '🧊 Icy roads & hazards'], ['camera', '📷 New cameras'], ['hotspot', '⚠️ Ticket hotspots'], ['other', '📣 Other']];
+export const CGROUPS = [['police', '🚓 Police & officers'], ['emergency', '🚑 Accidents & emergency'], ['ice', '🚨 ICE activity'], ['hazard', '🚧 Road hazards'], ['camera', '📷 New cameras'], ['hotspot', '⚠️ Ticket hotspots'], ['other', '📣 Other']];
 
 /** Shared ticket hotspots: from everyone (server) or just yours (offline). */
 function sharedHotspots() {
@@ -61,7 +61,7 @@ export function renderFeed() {
     <div class="btns"><button class="btn red" data-new>Report a sighting</button>${S.cloud ? '<button class="btn" data-refresh>Refresh</button>' : ''}</div>
     <div class="sec">${items.length ? items.map((i) => {
       if (i.kind === 'h') return `<div class="row t"><span class="emo">⚠️</span><div class="main"><div class="ttl">Ticket hotspot · ${esc(i.h.type)}</div><div class="meta">${esc(i.h.month || '')} · fine ${esc(i.h.fine)} · near ${esc(i.h.street)}</div></div></div>`;
-      const r = i.r, live = (r.expires || r.time + LIVE_MS) > Date.now() && r.status !== 'hidden' && r.status !== 'merged';
+      const r = i.r, live = reportLive(r);
       const voteable = S.cloud && !r.mine && live && r.status === 'live';
       return `<div class="row r" style="border-left-color:${rcat(r.type).c};${live ? '' : 'opacity:.6'}"><span class="emo">${rcat(r.type).e}</span><div class="main">
         <div class="ttl">${esc(r.type)}${r.status === 'pending' ? '<span class="tag">Being checked</span>' : live ? '<span class="tag live">Live</span>' : '<span class="tag">Expired</span>'}${r.confirms ? `<span class="tag">${r.confirms} confirmed</span>` : ''}</div>
@@ -94,7 +94,7 @@ export function renderContrib() {
     if (r.status === 'hidden') return `<span class="tag bad">Hidden</span>`;
     if (r.status === 'merged') return `<span class="tag">Merged into an existing report</span>`;
     if (r.status === 'pending') return `<span class="tag">Being checked</span>`;
-    return Date.now() - r.time < LIVE_MS ? '<span class="tag live">Live</span>' : '<span class="tag">Expired</span>';
+    return reportLive(r) ? '<span class="tag live">Live</span>' : '<span class="tag">Expired</span>';
   };
   host.innerHTML = `${pageHead('My Contributions', 'Everything you have posted to the community')}
     <div class="card"><h2>Sightings (${reps.length})</h2><div class="sec">${reps.length ? reps.map((r) => `<div class="row r" style="border-left-color:${rcat(r.type).c}"><span class="emo">${rcat(r.type).e}</span><div class="main"><div class="ttl">${esc(r.type)}${statusTag(r)}</div>
@@ -124,10 +124,11 @@ export function renderHeat() {
   }
   $('#hmapChips').innerHTML = '<button data-back class="chipback">← More</button>' +
     [['tickets', '⚠️ My tickets'], ['shared', '👥 Shared tickets'], ['reports', '📣 Reports'], ['cameras', '📷 Cameras']].map(([k, l]) => `<button data-h="${k}" aria-pressed="${hOn[k]}">${l}</button>`).join('') +
-    '<button data-zoom="dc">DC</button><button data-zoom="dmv">DMV region</button>';
+    '<button data-zoom="dc">DC</button><button data-zoom="md">Maryland</button><button data-zoom="dmv">DMV region</button>';
   $$('#hmapChips [data-h]').forEach((b) => (b.onclick = () => { hOn[b.dataset.h] = !hOn[b.dataset.h]; renderHeat(); }));
   $('#hmapChips [data-back]').onclick = () => go('more');
   $('#hmapChips [data-zoom="dc"]').onclick = () => hmap.setView(DC, 12);
+  $('#hmapChips [data-zoom="md"]').onclick = () => hmap.fitBounds([[37.9, -79.49], [39.72, -75.05]]);
   $('#hmapChips [data-zoom="dmv"]').onclick = () => hmap.setView([38.95, -77.12], 9);
   hLayer.clearLayers();
   const pts = [];

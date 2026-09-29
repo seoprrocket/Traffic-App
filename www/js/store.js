@@ -7,9 +7,10 @@ const KEY = 'ticketRadar.v1';
 export const DEFAULT_SETTINGS = {
   lead: 5, ticketRadius: 300, alertType: 'voice', share: false, ai: true, sensitivity: 'medium',
   officialCams: true, speedLimits: true, handsFreeAuto: true,
+  speedOverBy: 5, speedMax: 0, roadBumps: true, roadCurves: true, roadLimits: true, roadTolls: true,
 };
 export const DEFAULT_PROFILE = { name: '', homeLabel: '', workLabel: '', avoidRisk: 'warn', emailCoach: true };
-const LISTS = ['tickets', 'cameras', 'reports', 'routes', 'commutes', 'events', 'alerts', 'trips', 'outbox', 'official', 'community', 'hotspots', 'coach', 'predictions', 'disputes'];
+const LISTS = ['tickets', 'cameras', 'reports', 'routes', 'commutes', 'events', 'alerts', 'trips', 'outbox', 'official', 'community', 'hotspots', 'coach', 'predictions', 'disputes', 'plans'];
 
 function seed() {
   return {
@@ -121,9 +122,11 @@ export function allCameras() {
 }
 
 /** Community reports: from the server when signed in, otherwise your own recent ones. */
+import { ttlMs } from './reports.js';
 export const LIVE_MS = 6 * 3600 * 1000;
+export const reportLive = (r, now = Date.now()) => (r.expires || r.time + ttlMs(r.type)) > now && r.status !== 'hidden' && r.status !== 'merged';
 export function activeReports() {
   const now = Date.now();
   if (S.cloud && S.db.communityAt) return S.db.community.filter((r) => r.expires > now);
-  return S.db.reports.filter((r) => now - r.time < LIVE_MS && r.status !== 'hidden');
+  return S.db.reports.filter((r) => reportLive(r, now));
 }

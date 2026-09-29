@@ -167,7 +167,7 @@ textarea{min-height:64px;resize:vertical}
 .privacy{border:1px solid var(--ok);background:color-mix(in srgb,var(--ok) 10%,var(--surface));border-radius:12px;padding:12px;font-size:13px}
 
 .alert{position:fixed;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top,0px));z-index:3000;max-width:560px;margin:0 auto;border-radius:16px;padding:14px 16px;color:#fff;display:flex;gap:12px;align-items:center;box-shadow:0 10px 30px rgba(0,0,0,.4);animation:drop .25s ease-out}
-.alert.camera{background:#b86f00} .alert.ticket{background:#c02424} .alert.report{background:#5b35b0} .alert.info{background:#1d4f9e}
+.alert.camera{background:#b86f00} .alert.road{background:#2b6b3f} .alert.speed{background:#a61e4d} .alert.emergency{background:#c92a2a} .alert.ticket{background:#c02424} .alert.report{background:#5b35b0} .alert.info{background:#1d4f9e}
 .alert .big{font-size:30px}
 .alert b{display:block;font:700 22px/1.05 var(--display);text-transform:uppercase}
 .alert p{margin:2px 0 0;font-size:14px}
@@ -238,3 +238,35 @@ body.listening .mic,body.listening #hf-voice{animation:pulse 1.2s infinite}
 select{min-width:0;max-width:100%;text-overflow:ellipsis}
 /* while the hands-free screen is up, warnings sit above the big buttons so Stop drive stays reachable */
 body.hf .alert{top:auto;bottom:calc(128px + env(safe-area-inset-bottom,0px))}
+.hzpick{position:fixed;inset:0;z-index:3300;background:rgba(5,10,15,.82);display:flex;flex-direction:column;justify-content:flex-end;gap:12px;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+.hzgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.hzgrid button{min-height:92px;border:0;border-radius:18px;background:#1c2733;color:#f2f6f9;font:700 18px/1.1 var(--body);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.hzgrid button span{font-size:32px}
+.hzcancel{min-height:56px;border:0;border-radius:14px;background:#2c3a48;color:#f2f6f9;font:600 17px var(--body)}
+
+/* ---- drive planning, ETA, parking ---- */
+.etabar{position:absolute;left:12px;right:84px;bottom:16px;z-index:600;display:flex;gap:6px;align-items:stretch;max-width:560px}
+.etabar .etamain{flex:1;min-width:0;display:flex;gap:10px;align-items:center;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px 12px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.etabar .etamain b{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.etabar .etamain small{display:block;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.etabar .flag{font-size:22px}
+.etabar.late .etamain small{color:var(--danger);font-weight:600}
+.etabar .etashare{border:0;border-radius:14px;padding:0 14px;background:var(--you);color:#fff;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.etabar .etashare.on{background:var(--ok)}
+.etabar.hf{position:static;width:100%;max-width:520px}
+.etabar.hf .etamain{background:#16212c;border-color:#2c3a48;color:#f2f6f9}
+.etabar.hf .etamain small{color:#9fb0bf}
+.choicelink{display:flex;gap:12px;align-items:center;text-align:left;padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--fg);text-decoration:none}
+.choicelink b{display:block;font-size:16px}
+.choicelink small{color:var(--muted)}
+.choicelink .ic{width:42px;height:42px;border-radius:10px;display:grid;place-items:center;font-size:22px;flex:none}
+.plan .eyebrow{margin:0;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.bigtime{font:700 40px/1 var(--display);font-variant-numeric:tabular-nums}
+.bigtime.bad{color:var(--danger)}
+.tag.lo{background:var(--ok);color:#fff} .tag.md{background:var(--warn);color:#111} .tag.hi{background:var(--danger);color:#fff}
+.cols.tall{height:150px}
+.cols i.pick{background:var(--you)}
+.carphoto{max-width:100%;max-height:260px;border-radius:12px;border:1px solid var(--line);object-fit:cover}
+.small{font-size:13px}
+.cols.tall i{background:color-mix(in srgb,var(--you) 30%,var(--surface2))}
+.cols.tall i.pick{background:var(--you)}

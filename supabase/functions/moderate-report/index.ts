@@ -8,7 +8,8 @@ import { dist, scrub, box } from "../_shared/geo.ts";
 const GROUP: Record<string, string> = {
   "Speed trap / police": "police", "Officer location": "police", "Checkpoint": "police",
   "Immigration enforcement (ICE)": "ice", "New camera": "camera", "Ticket hotspot": "hotspot",
-  "Icy road": "hazard", "Road hazard": "hazard", "Other": "other",
+  "Icy road": "hazard", "Road hazard": "hazard", "Pothole": "hazard", "Debris": "hazard", "Flooding": "hazard",
+  "Accident": "emergency", "Emergency vehicle": "emergency", "Other": "other",
 };
 
 interface Verdict { decision: "publish" | "hide"; reason: string; clean_note: string; duplicate_of: string | null }
@@ -78,7 +79,7 @@ serve(async (req) => {
   } else if (dupe) {
     // Fold into the existing report: counts as a confirmation and keeps it alive longer
     const now = Date.now();
-    const exp = Math.min(Math.max(Date.parse(dupe.expires_at), now + 30 * 60e3), now + 6 * 3600e3);
+    const exp = Math.max(Date.parse(dupe.expires_at), now + 30 * 60e3);
     await db.from("reports").update({ confirms: (dupe.confirms ?? 0) + 1, expires_at: new Date(exp).toISOString() }).eq("id", dupe.id);
     await db.from("reports").update({ status: "merged", merged_into: dupe.id, clean_note: clean, moderation_reason: "Same as an existing report" }).eq("id", r.id);
   } else {

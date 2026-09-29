@@ -46,7 +46,9 @@ export function renderList() {
       : '<div class="empty">No tickets yet. Tap the red + on the map to scan or add your first one.</div>';
   } else {
     const mine = S.db.cameras;
-    host.innerHTML = `<p class="note" style="margin:0">${S.db.official.length} official cameras are loaded and ${S.db.settings.officialCams ? 'included in your warnings' : 'turned off in Settings'}. Your own pins:</p>` +
+    const byArea = {}; S.db.official.forEach((c) => { const k = c.jurisdiction || 'Other'; byArea[k] = (byArea[k] || 0) + 1; });
+    const areas = Object.entries(byArea).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${esc(k)} ${n}`).join(' · ');
+    host.innerHTML = `<p class="note" style="margin:0">${S.db.official.length} official cameras are loaded${areas ? ` (${areas})` : ''} and ${S.db.settings.officialCams ? 'included in your warnings' : 'turned off in Settings'}. Your own pins:</p>` +
       (mine.length ? mine.map((c) => `<div class="row c"><div class="main"><div class="ttl">${esc(c.name)}</div>
       <div class="meta">${esc(c.kind)} camera${c.limit ? ' · limit ' + c.limit + ' mph' : ''}${c.heading != null ? ' · catches ' + ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(c.heading / 45) % 8] + '-bound' : ''} · ${E.me ? fmtDist(dist(E.me, c)) + ' from you' : '<span class="mono">' + c.lat.toFixed(5) + ', ' + c.lng.toFixed(5) + '</span>'}</div></div>
       <div class="acts"><button class="sbtn" data-go="${c.id}">Map</button><button class="sbtn" data-ed="${c.id}">Edit</button><button class="sbtn danger" data-del="${c.id}">Delete</button></div></div>`).join('')

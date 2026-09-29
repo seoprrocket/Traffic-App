@@ -2,6 +2,7 @@
 import { S, sens, allCameras, activeReports, logAlert, logEvent, logTrip } from './store.js';
 import { $, esc, dist, bearing, angleDiff, fmtDist, streetKey, ago, bus, toast } from './util.js';
 import { watchLocation, notify, beep, speak, vibrate, keepAwake, askNotifyPermission, unlockAudio, isNative } from './native.js';
+import * as roads from './roads.js';
 
 export const E = { driving: false, me: null, heading: null, speed: 0, osmLimit: null, road: null, limitHere: null, next: null };
 const prevD = {}, fired = {}, inside = {};
@@ -9,7 +10,7 @@ let stopWatch = null, last = null, ref = null, trip = null;
 
 // ---------------------------------------------------------------- alerts
 let alertTimer = null;
-const ICON = { camera: '📷', ticket: '⚠️', report: '📣', info: '🧠' };
+const ICON = { camera: '📷', ticket: '⚠️', report: '📣', info: '🧠', road: '🛣️', speed: '⏱️', emergency: '🚑' };
 export function raise(kind, title, sub, voice, mode) {
   mode = mode || S.db.settings.alertType;
   $('.alert')?.remove();
@@ -31,7 +32,7 @@ export function raise(kind, title, sub, voice, mode) {
 export async function startDrive() {
   if (E.driving) return;
   unlockAudio();
-  await askNotifyPermission();
+  askNotifyPermission();                                        // ask, but never wait on the answer before watching GPS
   E.driving = true; last = null; ref = null; trip = null; E.speed = 0;
   keepAwake.wanted = true; keepAwake(true);
   if (S.db.settings.alertType === 'voice') speak(`Drive mode on. I'll warn you ${S.db.settings.lead} minutes before each camera.`);
@@ -78,7 +79,7 @@ function onFix(p) {
   trip.maxMph = Math.max(trip.maxMph, p.speed * 2.23694);
 
   E.me = p; E.speed = p.speed;
-  lookupSpeedLimit(p);
+  if (S.db.settings.speedLimits || roadAlertsOn()) roads.refresh(p);
   check(p);
   last = p;
   bus.emit('fix', p);
@@ -110,7 +111,8 @@ function check(cur) {
     if (d > 12000) { delete prevD[c.id]; continue; }
     const p = prevD[c.id]; prevD[c.id] = d;
     const approaching = p == null || d < p - 3 || d < 150;
-    const rightWay = c.heading == null || E.heading == null || angleDiff(E.heading, c.heading) <= 50;
+    // One-direction cameras wait until we know which way you're going (the first GPS fix has no direction)
+    const rightWay = c.heading == null ? true : E.heading == null ? false : angleDiff(E.heading, c.heading) <= 50;
     const ahead = isAhead(cur, c, d);
     const live = approaching && rightWay && ahead;
     geofence('c' + c.id, c.name, 'Camera', d <= 250 && rightWay, mph, c.limit);
@@ -155,39 +157,60 @@ function check(cur) {
     if (r.mine) continue;
     const d = dist(cur, r);
     const ahead = isAhead(cur, r, d);
+    const emergency = r.type === 'Emergency vehicle';
     if (ahead && d < 5000) candidates.push({ kind: 'report', label: r.type, name: r.place || '', d });
-    if (ahead && d <= 800 * SX.f && !fired['r' + r.id]) {
+    if (emergency && d <= 600 * SX.f && !fired['r' + r.id]) {
+      fired['r' + r.id] = 1;
+      raise('emergency', 'Emergency vehicle nearby', `${fmtDist(d)} ${ahead ? 'ahead' : 'away'} · ${ago(r.time)}. Move over or slow down if you pass it.`, `Emergency vehicle ${ahead ? 'ahead' : 'nearby'}. Move over or slow down.`);
+    } else if (ahead && d <= 800 * SX.f && !fired['r' + r.id]) {
       fired['r' + r.id] = 1;
       raise('report', r.type + ' reported', `${fmtDist(d)} ahead · ${ago(r.time)}${r.note ? ' · ' + r.note : ''}`, `${r.type} reported ${fmtDist(d)} ahead.`);
     }
     if (d > 2400) delete fired['r' + r.id];
   }
 
+  // Road features: posted limit, bumps, curves, limit drops, tolls
+  const rw = roads.check(cur, E.heading, mph, { bumps: st.roadBumps, curves: st.roadCurves, limits: st.roadLimits, tolls: st.roadTolls });
+  E.osmLimit = st.speedLimits ? roads.road.limit : null;
+  E.road = roads.road.name;
+  for (const w of rw) {
+    if (fired['rd' + w.key]) continue;
+    if (w.group && Date.now() - (groupAt[w.group] || 0) < (w.group === 'bump' ? 20000 : 180000)) { fired['rd' + w.key] = 1; continue; }
+    fired['rd' + w.key] = 1; if (w.group) groupAt[w.group] = Date.now();
+    raise('road', w.title, w.sub, w.voice);
+  }
+
   E.limitHere = limitNear ?? E.osmLimit ?? null;
+  speedCheck(Math.round(mph), E.limitHere, st);
   candidates.sort((a, b) => a.d - b.d);
   E.next = candidates[0] ? { ...candidates[0], eta: candidates[0].d / v / 60 } : null;
 }
+const groupAt = {};
+function roadAlertsOn() { const s = S.db.settings; return s.roadBumps || s.roadCurves || s.roadLimits || s.roadTolls; }
 
-// ---------------------------------------------------------------- posted speed limits (OpenStreetMap)
-let limAt = null, limT = 0, limBusy = false;
-async function lookupSpeedLimit(p) {
-  if (!S.db.settings.speedLimits || limBusy) return;
-  if (limAt && dist(limAt, p) < 180 && Date.now() - limT < 60000) return;
-  if (Date.now() - limT < 12000) return;
-  limBusy = true; limT = Date.now(); limAt = { lat: p.lat, lng: p.lng };
-  try {
-    const q = `[out:json][timeout:8];way(around:25,${p.lat},${p.lng})[highway][maxspeed];out tags 4;`;
-    const ctl = new AbortController(); setTimeout(() => ctl.abort(), 9000);
-    const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(q),
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: ctl.signal });
-    const js = await r.json();
-    const way = (js.elements || [])[0];
-    if (way) {
-      const raw = String(way.tags.maxspeed); const n = parseFloat(raw);
-      E.osmLimit = isNaN(n) ? null : /mph/i.test(raw) ? Math.round(n) : Math.round((n * 0.621371) / 5) * 5;
-      E.road = way.tags.name || way.tags.ref || null;
-    } else { E.osmLimit = null; E.road = null; }
-  } catch { /* keep last known limit */ } finally { limBusy = false; }
+// ---------------------------------------------------------------- your own speed alerts
+const sp = { over: 0, overOn: false, overAt: 0, max: 0, maxOn: false, maxAt: 0 };
+/** Over-limit threshold in mph above the limit, or null when off. */
+export const overBy = () => { const v = S.db.settings.speedOverBy; return v === '' || v == null || +v < 0 ? null : +v; };
+function speedCheck(mph, limit, st) {
+  const ob = overBy();
+  if (ob != null && limit) {
+    if (mph > limit + ob) {
+      if (++sp.over >= 3 && !sp.overOn && Date.now() - sp.overAt > 30000) {
+        sp.overOn = true; sp.overAt = Date.now();
+        raise('speed', `Slow down: ${mph} in a ${limit}`, ob ? `You're more than ${ob} mph over the limit` : "You're over the limit", `Slow down. The limit is ${limit}.`);
+      }
+    } else if (mph <= limit + ob - 2) { sp.over = 0; sp.overOn = false; }
+  }
+  const mx = +st.speedMax || 0;
+  if (mx > 0) {
+    if (mph > mx) {
+      if (++sp.max >= 3 && !sp.maxOn && Date.now() - sp.maxAt > 30000) {
+        sp.maxOn = true; sp.maxAt = Date.now();
+        raise('speed', `Over ${mx} mph`, `You're going ${mph} mph`, `You're over ${mx}.`);
+      }
+    } else if (mph <= mx - 2) { sp.max = 0; sp.maxOn = false; }
+  }
 }
 
 // ---------------------------------------------------------------- for voice & hands-free

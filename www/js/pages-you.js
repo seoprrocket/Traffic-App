@@ -6,6 +6,7 @@ import { raise } from './engine.js';
 import { unlockAudio } from './native.js';
 import { cloudConfigured, usingOverride, sendCode, verifyCode, signOut, syncNow, saveProfile, deleteAccount, loadOfficialCameras } from './cloud.js';
 import { summary } from './pages-main.js';
+import { pushState, enablePush, disablePush, testPush, pushTrip } from './netlify.js';
 
 const cfg = window.TR_CONFIG || {};
 const COMPANY = cfg.company || 'The Ticket Radar team';
@@ -174,7 +175,23 @@ export function openSettings() {
       <label class="f">Camera warning (minutes ahead)<input type="number" id="s-lead" min="1" max="15" value="${st.lead}"></label>
       <label class="f">Ticket-zone radius (meters)<input type="number" id="s-rad" min="50" max="1000" step="50" value="${st.ticketRadius}"></label>
     </div>
-    <label class="switch"><input type="checkbox" id="s-off" ${st.officialCams ? 'checked' : ''}><span><b>Official camera lists</b><small>Warn me about DC's published cameras and county lists, not just my pins.</small></span></label>
+    <h3 class="sech">Speed alerts</h3>
+    <div class="grid2">
+      <label class="f">Warn me when I'm over the limit by<select id="s-over">${[['', 'Off'], ['0', 'Any amount'], ['5', '5 mph'], ['10', '10 mph'], ['15', '15 mph']].map(([v, l]) => `<option value="${v}"${String(st.speedOverBy ?? '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="f">Also warn me above (mph, 0 = off)<input type="number" id="s-max" min="0" max="120" step="5" value="${+st.speedMax || 0}"></label>
+    </div>
+    <h3 class="sech">Road warnings</h3>
+    <div class="grid2">
+      <label class="switch"><input type="checkbox" id="s-rb" ${st.roadBumps ? 'checked' : ''}><span><b>Speed bumps</b></span></label>
+      <label class="switch"><input type="checkbox" id="s-rc" ${st.roadCurves ? 'checked' : ''}><span><b>Sharp curves</b></span></label>
+      <label class="switch"><input type="checkbox" id="s-rl" ${st.roadLimits ? 'checked' : ''}><span><b>Speed limit drops</b></span></label>
+      <label class="switch"><input type="checkbox" id="s-rt" ${st.roadTolls ? 'checked' : ''}><span><b>Toll booths</b></span></label>
+    </div>
+    <p class="note" style="margin:0">Road warnings and speed limits come from OpenStreetMap, which is good but not complete. Posted signs always win.</p>
+    <h3 class="sech">Phone notifications</h3>
+    <div id="s-push" class="note">Checking…</div>
+    <h3 class="sech">More</h3>
+    <label class="switch"><input type="checkbox" id="s-off" ${st.officialCams ? 'checked' : ''}><span><b>Official camera lists</b><small>Warn me about the cameras DC, Montgomery County and Prince George's County publish, plus county lists, not just my pins.</small></span></label>
     <label class="switch"><input type="checkbox" id="s-lim" ${st.speedLimits ? 'checked' : ''}><span><b>Show the speed limit for every road</b><small>Looks up posted limits from OpenStreetMap as you drive. Uses a little data.</small></span></label>
     <label class="switch"><input type="checkbox" id="s-hf" ${st.handsFreeAuto ? 'checked' : ''}><span><b>Hands-free screen while driving</b><small>Big speed readout and one-tap report buttons when drive mode starts.</small></span></label>
     <label class="switch"><input type="checkbox" id="s-share" ${st.share ? 'checked' : ''}><span><b>Share anonymized data</b><small>Your new tickets are anonymized and shared with the community.</small></span></label>
@@ -189,11 +206,41 @@ export function openSettings() {
       ticketRadius: Math.min(1000, Math.max(50, +s.querySelector('#s-rad').value || 300)), share: s.querySelector('#s-share').checked,
       ai: s.querySelector('#s-ai').checked, sensitivity: s.querySelector('#s-sens').value, officialCams: s.querySelector('#s-off').checked,
       speedLimits: s.querySelector('#s-lim').checked, handsFreeAuto: s.querySelector('#s-hf').checked,
+      speedOverBy: s.querySelector('#s-over').value === '' ? '' : +s.querySelector('#s-over').value,
+      speedMax: Math.max(0, Math.min(120, +s.querySelector('#s-max').value || 0)),
+      roadBumps: s.querySelector('#s-rb').checked, roadCurves: s.querySelector('#s-rc').checked,
+      roadLimits: s.querySelector('#s-rl').checked, roadTolls: s.querySelector('#s-rt').checked,
     });
     s.querySelector('#s-save').onclick = () => { read(); save(); saveProfile(); closeSheet(); toast('Settings saved'); };
     s.querySelector('#s-test').onclick = () => { read(); persist(); unlockAudio(); closeSheet(); raise('camera', `Camera in ~${S.db.settings.lead} min`, 'Test alert · this is what a warning looks like', `Heads up. Speed camera in about ${S.db.settings.lead} minutes.`); };
     s.querySelector('#s-clr').onclick = () => { S.db.tickets = S.db.tickets.filter((t) => !t.example); save(); closeSheet(); toast('Examples removed'); };
+    paintPush(s.querySelector('#s-push'));
   });
+}
+
+// ---------------------------------------------------------------- phone notifications block
+const PUSH_TEXT = {
+  on: 'On. This phone gets "time to leave" and parking meter notifications, even with the app closed.',
+  off: 'Off. Turn on to be told when to leave for saved trips and before your parking meter runs out, even with the app closed.',
+  install: 'On iPhone, add Ticket Radar to your Home Screen first (Share → Add to Home Screen), then open it from there to turn notifications on.',
+  unsupported: "This browser can't receive notifications. Saved trips still remind you while the app is open, and you can add them to your calendar.",
+  server: 'Not set up on the site yet (setup page, step 2). Until then, trips remind you while the app is open, and you can add them to your calendar.',
+  denied: 'Blocked for this site. Allow notifications for it in your phone or browser settings, then come back.',
+};
+async function paintPush(el) {
+  if (!el) return;
+  const st = await pushState();
+  el.innerHTML = `<p style="margin:0">${PUSH_TEXT[st]}</p>${st === 'on' ? '<div class="btns" style="margin-top:8px"><button class="btn" data-p="test">Send a test</button><button class="btn" data-p="off">Turn off</button></div>'
+    : st === 'off' ? '<div class="btns" style="margin-top:8px"><button class="btn primary" data-p="on">Turn on notifications</button></div>' : ''}`;
+  el.querySelectorAll('[data-p]').forEach((b) => (b.onclick = async () => {
+    busy(b, true);
+    try {
+      if (b.dataset.p === 'on') { await enablePush(); for (const t of S.db.plans || []) if (t.arriveBy > Date.now()) await pushTrip(t); toast('Notifications are on'); }
+      if (b.dataset.p === 'off') { await disablePush(); toast('Notifications are off'); }
+      if (b.dataset.p === 'test') { await testPush(); toast('Test sent. It should arrive in a few seconds.'); }
+    } catch (e) { toast(e.message, 6000); }
+    paintPush(el);
+  }));
 }
 
 // ---------------------------------------------------------------- Terms gate (first run)
@@ -230,10 +277,15 @@ export function renderPrivacy() {
     <h3>What other drivers can see</h3>
     <ul><li>Reports you post: type, location, time and the reviewed note. Never your name or email.</li>
       <li>Tickets you choose to share: location rounded to about 100 meters, month, type and a fine range.</li></ul>
+    <h3>Drive features</h3>
+    <ul><li><b>Plan a Drive:</b> your start and destination are sent to the site's server, which asks Google's Routes service for drive times with traffic. Saved trips you want notifications for are kept on the server (with an anonymous id for your phone) until an hour after the arrival time.</li>
+      <li><b>Share drive:</b> while you share, your location, speed, destination name and arrival time are stored on the server and shown to anyone with the link. The link stops working 30 minutes after you end the trip, and at most 4 hours after your last update.</li>
+      <li><b>Parking:</b> your saved spot, note and photo stay on your phone. A meter reminder sends only its time and message to the server.</li>
+      <li><b>Road warnings and parking search</b> send the area around you to OpenStreetMap's Overpass service.</li></ul>
     <h3>AI processing</h3>
     <p>Some features send data to Anthropic's Claude API: ticket photos you scan (read once, not stored by us), voice questions with your nearby hazards, report text for moderation, and summaries of your drive history for coaching, commute suggestions and dispute help. Anthropic processes this data to return an answer.</p>
     <h3>Other services</h3>
-    <p>Supabase hosts our database. Address searches go to OpenStreetMap's Nominatim; route checks to the OSRM routing service; speed-limit lookups to the Overpass API; map tiles come from OpenStreetMap. DC camera locations come from DC's open data. Weekly coach emails are sent through Resend. These services receive only what they need for that request, such as the address you search or the map area you view.</p>
+    <p>Supabase hosts our database. Address searches go to OpenStreetMap's Nominatim; route checks to the OSRM routing service; speed-limit lookups to the Overpass API; map tiles come from OpenStreetMap. Camera locations come from the open data published by DC, Montgomery County and Prince George's County, and from county camera web pages. Weekly coach emails are sent through Resend. These services receive only what they need for that request, such as the address you search or the map area you view.</p>
     <h3>Location permission</h3>
     <p>The app uses your location only while drive mode is on, or when you tap "Use my location." In the phone app, background location keeps warnings working when the screen is off. Turning drive mode off stops it.</p>
     <h3>How long we keep data</h3>

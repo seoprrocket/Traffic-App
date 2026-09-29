@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="description" content="Speed-camera and ticket-zone warnings for Washington DC, Maryland and Virginia drivers.">
-<title>Ticket Radar DC</title>
+<title>Ticket Radar</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="vendor/leaflet.css">
@@ -19,7 +19,7 @@
 <body>
 <div class="app">
   <header>
-    <div class="brand"><h1>Ticket Radar</h1><small>Washington, DC</small></div>
+    <div class="brand"><h1>Ticket Radar</h1><small>DC &amp; Maryland</small></div>
     <button class="chip" id="driveBtn" aria-pressed="false"><span class="dot"></span><span id="driveLbl">Start drive</span></button>
     <button class="iconbtn" id="setBtn" aria-label="Settings">⚙︎</button>
   </header>
@@ -35,6 +35,7 @@
         <button id="locBtn" aria-label="Center on me">◎</button>
         <button id="fitBtn" aria-label="Show all markers">⤢</button>
         <button id="hfBtn" aria-label="Hands-free screen">▣</button>
+        <button id="parkBtn" aria-label="Parking">🅿️</button>
         <button id="micBtn" class="mic" aria-label="Voice command" hidden>🎤</button>
       </div>
       <div class="legend">
@@ -44,6 +45,7 @@
         <div><span class="sw" style="background:var(--report)"></span>Community</div>
       </div>
       <div class="pickbar" id="pickbar" hidden>Tap the map where it is <button id="pickCancel">Cancel</button></div>
+      <div class="etabar" id="etabar" hidden></div>
       <button class="fab" id="fab" aria-label="Add ticket, camera or report">+</button>
     </section>
 
@@ -57,21 +59,11 @@
 
     <section class="view" id="view-stats" hidden><div class="wrap" id="statsBody"></div></section>
 
-    <section class="view" id="view-route" hidden><div class="wrap">
-      <div class="card">
-        <h2>Safe Route Planner</h2>
-        <p class="note" style="margin:0 0 12px">Check a trip for your ticket spots, known cameras and fresh community reports before you drive.</p>
-        <div class="sec">
-          <div class="loc" id="routeStart"></div>
-          <div class="loc" id="routeEnd"></div>
-          <button class="btn primary" id="routeGo">Check this route</button>
-        </div>
-      </div>
-      <div class="sec" id="routeOut"></div>
-    </div></section>
+    <section class="view" id="view-route" hidden><div class="wrap" id="p-drive"></div></section>
 
     <section class="view" id="view-more" hidden><div class="wrap" id="moreBody"></div></section>
 
+    <section class="view" id="view-parking" hidden><div class="wrap" id="p-parking"></div></section>
     <section class="view" id="view-add-location" hidden><div class="wrap" id="p-add"></div></section>
     <section class="view" id="view-driver-profile" hidden><div class="wrap" id="p-profile"></div></section>
     <section class="view" id="view-account" hidden><div class="wrap" id="p-account"></div></section>
@@ -103,7 +95,7 @@
     <button data-v="map" aria-selected="true"><span>🗺</span>Map</button>
     <button data-v="list" aria-selected="false"><span>☰</span>List</button>
     <button data-v="stats" aria-selected="false"><span>📊</span>Stats</button>
-    <button data-v="route" aria-selected="false"><span>↗</span>Route</button>
+    <button data-v="route" aria-selected="false"><span>🚗</span>Drive</button>
     <button data-v="more" aria-selected="false"><span>⋯</span>More</button>
   </nav>
 </div>
@@ -115,6 +107,7 @@
     <div class="hf-speed"><span id="hf-speed">–</span><small>MPH</small></div>
     <div id="hf-limit" hidden><span>SPEED LIMIT</span><b></b></div>
     <div id="hf-next"></div>
+    <div id="hf-eta" class="etabar hf" hidden></div>
   </div>
   <div class="hf-btns">
     <button id="hf-voice"><span>🎤</span>Voice</button>

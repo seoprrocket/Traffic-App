@@ -2,11 +2,13 @@
 import { S, save, upsertLocal } from './store.js';
 import { $, $$, bus, debounce, toast, today, uuid } from './util.js';
 import { map, drawMarkers, placeMe, fitAll } from './mapview.js';
-import { E, startDrive, stopDrive } from './engine.js';
+import { E, startDrive, stopDrive, overBy } from './engine.js';
 import { locateOnce, unlockAudio, isNative } from './native.js';
 import { initAuth, flush, loadCommunity, loadOfficialCameras, vote, loadAgentOutputs, cloudConfigured } from './cloud.js';
 import { addChooser, scanTicket, reportForm, ticketFields, readTicket, locWidget, pageHead, bindBack, geoFail } from './ui.js';
-import { renderList, renderStats, renderMore, setupRouteTab, renderRouteTab } from './pages-main.js';
+import { renderList, renderStats, renderMore } from './pages-main.js';
+import { renderDrive, tripTick, paintEta } from './trip.js';
+import { renderParking } from './parking.js';
 import { renderCommunityMap, renderFeed, renderContrib, renderHeat } from './pages-community.js';
 import { renderRoutes, renderCommutes, commuteCheck } from './pages-plan.js';
 import { renderCoach, renderTips, renderDispute } from './pages-learn.js';
@@ -48,6 +50,7 @@ const TABS = ['map', 'list', 'stats', 'route', 'more'];
 const PAGES = {
   'add-location': { t: 'Add Location', e: '➕', d: 'Log a ticket spot by address', g: 'Log', r: renderAdd },
   'scan': { t: 'Scan a Ticket', e: '📸', d: 'Photo of the notice fills it all in', g: 'Log', act: scanTicket },
+  'parking': { t: 'Parking', e: '🅿️', d: 'Find a spot, mark where you parked', g: 'Plan', r: renderParking },
   'saved-routes': { t: 'Saved Routes', e: '🧭', d: 'Your frequent trips, pre-checked', g: 'Plan', r: renderRoutes },
   'commute-schedules': { t: 'Commute Schedules', e: '🗓', d: 'Warnings before you leave', g: 'Plan', r: renderCommutes },
   'driving-coach': { t: 'Driving Coach', e: '🎯', d: 'Weekly review and tips', g: 'Learn', r: renderCoach },
@@ -79,7 +82,7 @@ function render(v) {
   if (v === 'map') setTimeout(() => map.invalidateSize(), 50);
   else if (v === 'list') renderList();
   else if (v === 'stats') renderStats();
-  else if (v === 'route') renderRouteTab();
+  else if (v === 'route') renderDrive();
   else if (v === 'more') renderMore(PAGES);
   else PAGES[v]?.r?.();
 }
@@ -93,6 +96,7 @@ $('#setBtn').onclick = openSettings;
 $('#fab').onclick = addChooser;
 $('#micBtn').onclick = () => { unlockAudio(); voiceCommand(); };
 $('#hfBtn').onclick = () => showHandsFree(true);
+$('#parkBtn').onclick = () => { S.parkNear = S.db.activeTrip?.dest || null; show('parking'); };
 $('#fitBtn').onclick = () => fitAll(E.me);
 $('#locBtn').onclick = () => {
   if (E.me) { map.setView([E.me.lat, E.me.lng], 16); follow = true; return; }
@@ -102,10 +106,11 @@ let follow = true;
 map.on('dragstart', () => { follow = false; });
 
 // ---------------------------------------------------------------- events between modules
-const rerender = debounce(() => { drawMarkers(); if (S.view && S.view !== 'map' && S.view !== 'add-location') render(S.view); }, 60);
+const rerender = debounce(() => { drawMarkers(); if (S.view && !['map', 'add-location', 'route', 'parking'].includes(S.view)) render(S.view); }, 60);
 bus.on('change', rerender);
 bus.on('community', () => { drawMarkers(); if (['community-map', 'reporting-feed', 'my-contributions', 'risk-heatmap'].includes(S.view)) render(S.view); });
 bus.on('agents', () => { if (['driving-coach', 'commute-schedules', 'dispute'].includes(S.view)) render(S.view); });
+bus.on('drive', () => paintEta());
 bus.on('log', debounce(() => { if (S.view === 'alert-log') renderLog(); }, 300));
 bus.on('auth', () => { loadOfficialCameras(true); rerender(); });
 bus.on('outbox', debounce(() => flush(), 1500));
@@ -123,13 +128,13 @@ bus.on('fix', (p) => {
   const mph = Math.round(p.speed * 2.23694);
   $('#spdVal').textContent = mph;
   $('#limSign').hidden = !E.limitHere; $('#limVal').textContent = E.limitHere || '';
-  $('#spdSign').classList.toggle('over', !!E.limitHere && mph > E.limitHere + 1);
+  $('#spdSign').classList.toggle('over', !!E.limitHere && mph > E.limitHere + (overBy() ?? 1));
   paintHandsFree();
 });
 
 // ---------------------------------------------------------------- boot
 (async function boot() {
-  setupRouteTab(); setupHandsFree();
+  setupHandsFree();
   drawMarkers();
   show(location.hash.slice(1) || 'map', false);
   setTimeout(() => fitAll(null), 150);
@@ -142,6 +147,8 @@ bus.on('fix', (p) => {
   setInterval(() => { if (S.cloud && (E.driving || ['map', 'community-map', 'reporting-feed'].includes(S.view))) loadCommunity(); }, 20000);
   setInterval(() => { if (!S.cloud) drawMarkers(); }, 60000);
   setInterval(commuteCheck, 60000); setTimeout(commuteCheck, 4000);
+  setInterval(tripTick, 60000); setTimeout(tripTick, 5000);
+  paintEta();
   setInterval(flush, 30000);
   document.addEventListener('pointerdown', unlockAudio, { once: true });
   if ('serviceWorker' in navigator && window.isSecureContext && !isNative) navigator.serviceWorker.register('sw.js').catch(() => {});

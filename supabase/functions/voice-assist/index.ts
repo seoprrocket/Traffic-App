@@ -6,7 +6,8 @@ import { askStructured, FAST_MODEL } from "../_shared/claude.ts";
 import { dist, bearing, angleDiff, box } from "../_shared/geo.ts";
 
 const REPORT_TYPES = ["Speed trap / police", "Officer location", "Immigration enforcement (ICE)", "Checkpoint",
-  "New camera", "Ticket hotspot", "Icy road", "Road hazard", "Other"];
+  "Accident", "Emergency vehicle", "Pothole", "Debris", "Flooding", "Icy road", "Road hazard",
+  "New camera", "Ticket hotspot", "Other"];
 
 interface Answer { speech: string; action: "none" | "report" | "start_drive" | "stop_drive"; report_type: string | null; report_note: string | null }
 

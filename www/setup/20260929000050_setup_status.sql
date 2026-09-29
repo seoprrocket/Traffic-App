@@ -30,6 +30,15 @@ begin
     r := r || jsonb_build_object('cron_jobs', null);
   end;
 
+  -- Has the Maryland update (20260929000200_maryland.sql) been run?
+  r := r || jsonb_build_object('maryland', exists (
+    select 1 from pg_constraint where conname = 'cameras_source_check'
+      and pg_get_constraintdef(oid) like '%md_open_data%'));
+
+  -- Has the hazards update (20260929000300_hazards.sql) been run?
+  r := r || jsonb_build_object('hazards', exists (
+    select 1 from pg_proc where proname = 'report_ttl' and pronamespace = 'public'::regnamespace));
+
   r := r || jsonb_build_object(
     'cameras', (select coalesce(jsonb_object_agg(source, n), '{}'::jsonb)
                   from (select source, count(*) as n from public.cameras

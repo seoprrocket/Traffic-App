@@ -49,9 +49,9 @@ export function locWidget(host, state, label, onChange) {
       const q = (inp.value || '').trim(); if (!q) return;
       res.innerHTML = '<span class="note">Searching…</span>';
       try {
-        const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=us&viewbox=-77.60,39.35,-76.50,38.55&bounded=1&q=' + encodeURIComponent(q);
+        const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=us&viewbox=-79.50,39.75,-75.00,37.85&bounded=1&q=' + encodeURIComponent(q);
         const js = await (await fetch(url, { headers: { Accept: 'application/json' } })).json();
-        if (!js.length) { res.innerHTML = '<span class="note">Nothing found nearby. Try "14th St NW & U St NW, Washington DC" or pick it on the map.</span>'; return; }
+        if (!js.length) { res.innerHTML = '<span class="note">Nothing found nearby. Add the city, like "Rockville Pike & Nicholson Ln, Rockville MD", or pick it on the map.</span>'; return; }
         res.innerHTML = '';
         js.forEach((x) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = x.display_name.replace(/, United States$/, ''); b.onclick = () => set(+x.lat, +x.lon, b.textContent); res.appendChild(b); });
       } catch { res.innerHTML = '<span class="note">Search is offline. Use "Pick on map" instead.</span>'; }
