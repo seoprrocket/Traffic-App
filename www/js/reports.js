@@ -20,3 +20,5 @@ export const RTYPES = Object.keys(RCAT);
 export const HAZARDS = ['Accident', 'Emergency vehicle', 'Pothole', 'Debris', 'Flooding', 'Road hazard'];
 export const rcat = (t) => RCAT[t] || RCAT.Other;
 export const ttlMs = (t) => rcat(t).ttl * 60000;
+/** Report type as it should be read aloud. */
+export const sayType = (t) => ({ 'Speed trap / police': 'Police', 'Immigration enforcement (ICE)': 'Immigration enforcement', 'Road hazard': 'A road hazard', 'Other': 'Something' }[t] || t);

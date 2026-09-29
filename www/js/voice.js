@@ -7,7 +7,7 @@ import { listen, canListen, speak, locateOnce, vibrate } from './native.js';
 import { postReport, undoReport, go } from './ui.js';
 import { agent } from './cloud.js';
 import { rcat } from './mapview.js';
-import { HAZARDS } from './reports.js';
+import { HAZARDS, sayType } from './reports.js';
 
 // ---------------------------------------------------------------- understanding simple commands on the phone
 const REPORT_WORDS = [
@@ -48,7 +48,7 @@ async function doReport(type, note) {
   if (!at) { try { at = await locateOnce(); } catch { speak('I need your location to report that.'); return; } }
   const r = postReport({ type, lat: at.lat, lng: at.lng, place: E.road || '', note: note || '' });
   lastReportId = r.id;
-  speak(`Reported ${type.replace(' / police', '').replace(' (ICE)', '')}. Say undo if that was wrong.`);
+  speak(`Reported ${sayType(type).replace(/^(A road hazard|Something)$/, 'it')}. Say undo if that was wrong.`);
   undoBar(r);
 }
 function undoBar(r) {

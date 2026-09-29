@@ -2,7 +2,7 @@
 import { S, save, persist, replaceDb, SENS, upsertLocal } from './store.js';
 import { $, $$, esc, money, stamp, today, toast, download, csv } from './util.js';
 import { pageHead, bindBack, openSheet, closeSheet, head, atOpts, confirmDel, busy, go } from './ui.js';
-import { raise } from './engine.js';
+import { raise, playSamples } from './engine.js';
 import { unlockAudio } from './native.js';
 import { cloudConfigured, usingOverride, sendCode, verifyCode, signOut, syncNow, saveProfile, deleteAccount, loadOfficialCameras } from './cloud.js';
 import { summary } from './pages-main.js';
@@ -198,7 +198,7 @@ export function openSettings() {
     <div class="privacy"><b>Privacy protected.</b> Only anonymized data is shared: rounded location, month, location type and fine range. No personal information is ever shared.</div>
     <label class="switch"><input type="checkbox" id="s-ai" ${st.ai ? 'checked' : ''}><span><b>Proactive alerts</b><small>Warns you before scheduled commutes and before areas where you've been ticketed.</small></span></label>
     <label class="f">Alert sensitivity<select id="s-sens">${Object.entries(SENS).map(([k, v]) => `<option value="${k}"${st.sensitivity === k ? ' selected' : ''}>${v.label}</option>`).join('')}</select></label>
-    <div class="btns"><button class="btn" id="s-test">Test an alert</button><button class="btn primary" id="s-save">Save settings</button></div>
+    <div class="btns"><button class="btn" id="s-test">Hear sample alerts</button><button class="btn primary" id="s-save">Save settings</button></div>
     <div class="btns"><button class="btn danger" id="s-clr">Remove example entries</button></div>
   </div>`, (s) => {
     const read = () => Object.assign(S.db.settings, {
@@ -212,7 +212,7 @@ export function openSettings() {
       roadLimits: s.querySelector('#s-rl').checked, roadTolls: s.querySelector('#s-rt').checked,
     });
     s.querySelector('#s-save').onclick = () => { read(); save(); saveProfile(); closeSheet(); toast('Settings saved'); };
-    s.querySelector('#s-test').onclick = () => { read(); persist(); unlockAudio(); closeSheet(); raise('camera', `Camera in ~${S.db.settings.lead} min`, 'Test alert · this is what a warning looks like', `Heads up. Speed camera in about ${S.db.settings.lead} minutes.`); };
+    s.querySelector('#s-test').onclick = () => { read(); persist(); unlockAudio(); closeSheet(); playSamples(); toast('Playing 11 sample alerts. This takes about a minute.', 4000); };
     s.querySelector('#s-clr').onclick = () => { S.db.tickets = S.db.tickets.filter((t) => !t.example); save(); closeSheet(); toast('Examples removed'); };
     paintPush(s.querySelector('#s-push'));
   });

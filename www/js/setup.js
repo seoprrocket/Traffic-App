@@ -206,13 +206,13 @@ function steps() {
     const state = S.emailDone ? 'done' : 'todo';
     out.push({ title: 'Set up sign-in emails', sub: 'People sign in with a 6-digit emailed code', state, html: `
       <ol class="small">
-        <li>Open Authentication → Emails, choose the <b>Magic Link</b> template, and replace its body with the text below. The subject can be "Your Ticket Radar code".</li>
+        <li>Open Authentication → Emails → Templates. Replace the body of <b>both</b> the <b>Confirm signup</b> and <b>Magic Link</b> templates with the text below. First-time sign-ins use Confirm signup; returning ones use Magic Link. The subject can be "Your Ticket Radar code".</li>
         <li>Open Authentication → URL Configuration and set <b>Site URL</b> to <span class="mono sel">${esc(location.origin)}</span></li>
         <li><b>Before other people sign in:</b> Supabase's built-in sender only emails your own team and only a few per hour. Add custom SMTP under Authentication → Emails → SMTP Settings. Resend works well and has a free tier.</li>
       </ol>
-      ${code('email-tpl', 'Magic Link email body', EMAIL)}
+      ${code('email-tpl', 'Email body for Confirm signup and Magic Link', EMAIL)}
       ${links([['Email templates', dash('auth/templates')], ['URL configuration', dash('auth/url-configuration')], ['Resend', 'https://resend.com']])}
-      <label class="switch"><input type="checkbox" id="in-email" ${S.emailDone ? 'checked' : ''}><span><b>I've updated the email template</b><small>This page can't read your email settings, so tick this yourself.</small></span></label>` });
+      <label class="switch"><input type="checkbox" id="in-email" ${S.emailDone ? 'checked' : ''}><span><b>I've updated both email templates</b><small>This page can't read your email settings, so tick this yourself.</small></span></label>` });
   }
 
   // 5. Connect the live app

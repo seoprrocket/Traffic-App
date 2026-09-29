@@ -47,6 +47,13 @@ export function parseHeading(text) {
 }
 export const headingName = (h) => (h == null ? 'any direction' : DIRS.reduce((best, d) => (angleDiff(d[1], h) < angleDiff(best[1], h) ? d : best))[0] + '-bound');
 
+/** Distance as it should be read aloud: "600 feet", "1.2 miles". */
+export function sayDist(m) {
+  const mi = m / 1609.34;
+  if (mi < 0.2) return `${Math.max(50, Math.round((m * 3.281) / 50) * 50)} feet`;
+  const v = mi < 10 ? +mi.toFixed(1) : Math.round(mi);
+  return `${v} ${v === 1 ? 'mile' : 'miles'}`;
+}
 export function fmtDist(m) { const mi = m / 1609.34; return mi < 0.2 ? Math.round(m * 3.281) + ' ft' : mi.toFixed(mi < 10 ? 1 : 0) + ' mi'; }
 export function ago(t) {
   const s = (Date.now() - t) / 1000;

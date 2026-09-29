@@ -1,6 +1,7 @@
 // Drive mode: follows your GPS and fires the warnings.
 import { S, sens, allCameras, activeReports, logAlert, logEvent, logTrip } from './store.js';
-import { $, esc, dist, bearing, angleDiff, fmtDist, streetKey, ago, bus, toast } from './util.js';
+import { $, esc, dist, bearing, angleDiff, fmtDist, sayDist, streetKey, ago, bus, toast } from './util.js';
+import { sayType } from './reports.js';
 import { watchLocation, notify, beep, speak, vibrate, keepAwake, askNotifyPermission, unlockAudio, isNative } from './native.js';
 import * as roads from './roads.js';
 
@@ -11,7 +12,7 @@ let stopWatch = null, last = null, ref = null, trip = null;
 // ---------------------------------------------------------------- alerts
 let alertTimer = null;
 const ICON = { camera: '📷', ticket: '⚠️', report: '📣', info: '🧠', road: '🛣️', speed: '⏱️', emergency: '🚑' };
-export function raise(kind, title, sub, voice, mode) {
+export function raise(kind, title, sub, voice, mode, opts = {}) {
   mode = mode || S.db.settings.alertType;
   $('.alert')?.remove();
   const el = document.createElement('div');
@@ -24,9 +25,40 @@ export function raise(kind, title, sub, voice, mode) {
   if (mode === 'sound' || mode === 'voice') beep();
   if (mode === 'voice') setTimeout(() => speak(voice || `${title}. ${sub}`), 650);
   if (isNative || document.hidden) notify(title, sub);
+  if (opts.log === false) return;
   logAlert(kind, title, sub);
   if (trip) trip.alerts++;
 }
+
+// ---------------------------------------------------------------- sample alerts (Settings → Hear sample alerts)
+export const SAMPLES = [
+  ['camera', 'Camera in ~5 min', 'Wisconsin Ave NW S/B · 1.8 mi ahead · limit 25 mph', 'Heads up. Speed camera in about 5 minutes. Speed limit 25.'],
+  ['camera', 'Camera right ahead', 'Wisconsin Ave NW S/B · keep it under 25 mph', 'Speed camera right ahead. Keep it under 25.'],
+  ['ticket', 'Ticket zone', 'You got a speed camera ticket on New York Ave NE · limit 30 mph', "Caution. You've been ticketed on New York Ave NE before. Limit 30. Watch for the camera."],
+  ['speed', 'Slow down: 42 in a 30', "You're more than 5 mph over the limit", 'Slow down. The limit is 30.'],
+  ['road', 'Speed bump ahead', 'In about 400 ft', 'Speed bump ahead.'],
+  ['road', 'Sharp curve ahead', 'In about 650 ft on Rock Creek Pkwy', 'Sharp curve ahead. Slow down.'],
+  ['road', 'Speed limit drops to 25', 'In about 800 ft (now 40)', 'Speed limit drops to 25 ahead.'],
+  ['road', 'Toll ahead', 'In about 0.6 mi', 'Toll ahead.'],
+  ['report', 'Speed trap / police reported', '0.4 mi ahead · 6 min ago', 'Police reported 0.4 miles ahead.'],
+  ['emergency', 'Emergency vehicle nearby', '600 ft ahead · 2 min ago. Move over or slow down if you pass it.', 'Emergency vehicle ahead. Move over or slow down.'],
+  ['info', 'Time to leave for Dentist', 'About 25 min with traffic. Arrive by 3:30 PM.', 'Time to leave for Dentist. About 25 minutes.'],
+];
+let sampleTimer = null;
+/** Plays each alert type in turn, a few seconds apart. Not saved to the alert log. */
+export function playSamples(list = SAMPLES, gap = 5200) {
+  clearTimeout(sampleTimer);
+  unlockAudio();
+  let i = 0;
+  const next = () => {
+    if (i >= list.length) return;
+    const [k, t, s, v] = list[i++];
+    raise(k, `${t}`, `${s}  (sample ${i} of ${list.length})`, v, 'voice', { log: false });
+    sampleTimer = setTimeout(next, gap);
+  };
+  next();
+}
+export function stopSamples() { clearTimeout(sampleTimer); $('.alert')?.remove(); try { speechSynthesis.cancel(); } catch { /* none */ } }
 
 // ---------------------------------------------------------------- start / stop
 export async function startDrive() {
@@ -164,7 +196,7 @@ function check(cur) {
       raise('emergency', 'Emergency vehicle nearby', `${fmtDist(d)} ${ahead ? 'ahead' : 'away'} · ${ago(r.time)}. Move over or slow down if you pass it.`, `Emergency vehicle ${ahead ? 'ahead' : 'nearby'}. Move over or slow down.`);
     } else if (ahead && d <= 800 * SX.f && !fired['r' + r.id]) {
       fired['r' + r.id] = 1;
-      raise('report', r.type + ' reported', `${fmtDist(d)} ahead · ${ago(r.time)}${r.note ? ' · ' + r.note : ''}`, `${r.type} reported ${fmtDist(d)} ahead.`);
+      raise('report', r.type + ' reported', `${fmtDist(d)} ahead · ${ago(r.time)}${r.note ? ' · ' + r.note : ''}`, `${sayType(r.type)} reported ${sayDist(d)} ahead.`);
     }
     if (d > 2400) delete fired['r' + r.id];
   }

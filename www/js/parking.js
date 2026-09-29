@@ -57,7 +57,7 @@ function armMeter() {
   const fire = () => {
     const left = Math.max(0, Math.round((car.meterUntil - Date.now()) / 60000));
     const msg = left ? `Your parking runs out in ${left} min, at ${clock(car.meterUntil)}.` : 'Your parking time is up.';
-    toast(msg, 8000); beep(); speak(msg); notify('Parking meter', msg);
+    toast(msg, 8000); beep(); speak(left ? `Your parking runs out in ${left} minutes.` : msg); notify('Parking meter', msg);
   };
   if (at > Date.now()) meterTimer = setTimeout(fire, Math.min(at - Date.now(), 2 ** 31 - 1));
 }
