@@ -198,7 +198,8 @@ function steps() {
       <ol class="small"><li>Press <b>Copy database SQL</b>.</li><li>Open the SQL editor, paste, and press Run. It takes a few seconds.</li><li>Come back and press <b>Check everything</b>.</li></ol>
       <div class="btns"><button class="btn primary" data-act="copy-db">Copy database SQL</button>${conn?.tables && !md ? '<button class="btn" data-act="copy-md">Copy database updates</button>' : ''}</div>
       ${links([['SQL editor', dash('sql/new')]])}
-      <p class="note small" style="margin:0">Run it only once on a new project. If it says a table already exists, that part is done.</p>` });
+      <p class="note small" style="margin:0">Run it only once on a new project. If it says a table already exists, that part is done.</p>
+      <p class="note small" style="margin:0">Setting up the AI features with GitHub (last step)? It builds and updates the database for you, so you can skip this.</p>` });
   }
 
   // 4. Sign-in emails
@@ -260,15 +261,31 @@ function steps() {
         ${check(on ? (camsDC > 0 && camsMD > 0 ? true : camsDC || camsMD ? 'maybe' : false) : null, 'Official cameras loaded', camsDC || camsMD ? `${camsDC} DC · ${camsMD} Maryland${camsMD ? '' : ' (run the Maryland update in step 3, redeploy camera-sync, then load cameras again)'}` : 'Run "Load cameras now" below once everything above is set.')}
         ${check(on && hl ? (sec.RESEND_API_KEY && sec.RESEND_FROM ? true : 'maybe') : null, 'Weekly coach email (optional)', sec.RESEND_API_KEY ? '' : 'Set RESEND_API_KEY and RESEND_FROM to email the Monday review.')}
       </ul>
-      <p class="small" style="margin:0"><b>1. In a terminal</b>, from the unzipped ticket-radar folder. Replace <span class="mono">sk-ant-YOUR-KEY</span> with your key from console.anthropic.com. The scheduler secret was made for you in this browser; keep it private.</p>
+      <div class="easy">
+        <p class="small" style="margin:0"><b>Easy way, no terminal: let GitHub set it up.</b> Add these keys to your GitHub repo once, then press Run. GitHub builds the database, saves the keys in Supabase, deploys the agents, installs the schedules and loads the cameras. It runs again by itself whenever the app's Supabase files change.</p>
+        <label class="f">Your GitHub repo<input type="text" id="in-repo" value="${esc(S.repo || '')}" placeholder="yourname/Traffic-App" autocomplete="off" spellcheck="false"></label>
+        <ol class="small keys">
+          <li><b>SUPABASE_ACCESS_TOKEN</b>: make one at Supabase → Account → Access Tokens → Generate new token. Name it "GitHub".</li>
+          <li><b>SUPABASE_PROJECT_REF</b>: <span class="mono sel">${esc(ref() || 'your 20-letter project code')}</span>${ref() ? ' <button class="linkish" data-copytext="' + esc(ref()) + '">Copy</button>' : ''}</li>
+          <li><b>ANTHROPIC_API_KEY</b>: create one at console.anthropic.com → API Keys. Add a little credit under Billing first.</li>
+          <li><b>CONTACT_EMAIL</b> (optional): <span class="mono sel">${esc(S.contact || 'you@yourdomain.com')}</span></li>
+          <li><b>RESEND_API_KEY</b> and <b>RESEND_FROM</b> (optional): for the Monday coach email.</li>
+        </ol>
+        <p class="small" style="margin:0">For each one: press <b>Add a GitHub secret</b>, type the name exactly as shown, paste the value, and save. Then press <b>Run the setup</b> and click the green <b>Run workflow</b> button. It takes about 3 minutes; come back and press Check everything.</p>
+        ${links([['Add a GitHub secret', S.repo ? `https://github.com/${S.repo}/settings/secrets/actions/new` : 'https://github.com/'], ['Run the setup', S.repo ? `https://github.com/${S.repo}/actions/workflows/supabase.yml` : 'https://github.com/'], ['Supabase access tokens', 'https://supabase.com/dashboard/account/tokens'], ['Anthropic API keys', 'https://console.anthropic.com/settings/keys']])}
+        ${S.repo ? '' : '<p class="note small" style="margin:0">Type your repo above so these links go straight to the right pages.</p>'}
+      </div>
+      <details class="lib"><summary>Or do it by hand in a terminal</summary><div class="sec" style="padding-bottom:14px">
+      <p class="small" style="margin:0"><b>1. In a terminal</b>, from the ticket-radar folder. Replace <span class="mono">sk-ant-YOUR-KEY</span> with your key from console.anthropic.com. The scheduler secret was made for you in this browser; keep it private.</p>
       ${code('term', 'Terminal', terminal())}
       <p class="small" style="margin:0"><b>2. In the SQL editor</b>, run this so the database can call the agents:</p>
       ${code('vault', 'SQL: Vault', vaultSql())}
       <p class="small" style="margin:0"><b>3.</b> Still in the SQL editor, install the schedules, then load the cameras:</p>
       <div class="btns"><button class="btn" data-act="copy-sched">Copy schedules SQL</button></div>
       ${code('loadcams', 'SQL: load cameras now', "select public.call_agent('camera-sync');")}
-      ${links([['SQL editor', dash('sql/new')], ['Edge Functions', dash('functions')], ['Anthropic keys', 'https://console.anthropic.com/settings/keys'], ['Node.js', 'https://nodejs.org']])}
-      <p class="note small" style="margin:0">Optional coach email: <span class="mono">npx supabase secrets set RESEND_API_KEY=re_… RESEND_FROM="Ticket Radar &lt;coach@yourdomain.com&gt;"</span>. <button class="linkish" data-act="new-secret">Make a new scheduler secret</button></p>` });
+      ${links([['SQL editor', dash('sql/new')], ['Edge Functions', dash('functions')], ['Node.js', 'https://nodejs.org']])}
+      <p class="note small" style="margin:0">Optional coach email: <span class="mono">npx supabase secrets set RESEND_API_KEY=re_… RESEND_FROM="Ticket Radar &lt;coach@yourdomain.com&gt;"</span>. <button class="linkish" data-act="new-secret">Make a new scheduler secret</button></p>
+      </div></details>` });
   }
   return out;
 }
@@ -310,8 +327,11 @@ document.addEventListener('change', (e) => {
   const t = e.target;
   if (t.id === 'in-email') { S.emailDone = t.checked; keep(); render(); }
   if (t.id === 'in-company' || t.id === 'in-contact') { S[t.id === 'in-company' ? 'company' : 'contact'] = t.value.trim(); keep(); render(); }
+  if (t.id === 'in-repo') { S.repo = t.value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$|\/+$/g, ''); keep(); render(); }
 });
 document.addEventListener('click', async (e) => {
+  const ct = e.target.closest('[data-copytext]');
+  if (ct) { copyText(ct.dataset.copytext); return; }
   const c = e.target.closest('[data-copy]');
   if (c) { copyText($('#' + c.dataset.copy).textContent); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;

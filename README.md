@@ -57,6 +57,17 @@ At the bottom, **Live health** shows the official camera count, each county sour
 
 The dashboard generates a private scheduler secret in your browser and puts the same value into both the terminal command and the Vault SQL. Run both from the dashboard so they match; the dashboard checks that they do.
 
+## Turn on the AI features the easy way (GitHub, no terminal)
+
+1. In your GitHub repo, open **Settings → Secrets and variables → Actions → New repository secret** and add:
+   - `SUPABASE_ACCESS_TOKEN`: from supabase.com/dashboard/account/tokens
+   - `SUPABASE_PROJECT_REF`: the 20-letter code in your project URL
+   - `ANTHROPIC_API_KEY`: from console.anthropic.com
+   - optional: `CONTACT_EMAIL`, `RESEND_API_KEY`, `RESEND_FROM`
+2. Open **Actions → Set up Supabase and AI → Run workflow**.
+
+In about 3 minutes it builds or updates the database, saves the keys in Supabase (with a matching scheduler secret), deploys every agent, installs the schedules and loads the cameras. It runs again automatically whenever files in `supabase/` change. The terminal steps above are only needed if you'd rather do it by hand.
+
 ## What each agent does
 
 | Agent | Runs | Does |

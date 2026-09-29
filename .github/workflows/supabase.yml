@@ -1,0 +1,73 @@
+# Sets up Supabase and the AI features with no terminal.
+# 1. Add repository secrets (Settings → Secrets and variables → Actions):
+#      SUPABASE_ACCESS_TOKEN   supabase.com/dashboard/account/tokens
+#      SUPABASE_PROJECT_REF    the 20-letter code in your project URL
+#      ANTHROPIC_API_KEY       console.anthropic.com
+#    Optional: CONTACT_EMAIL, RESEND_API_KEY, RESEND_FROM
+# 2. Actions → "Set up Supabase and AI" → Run workflow.
+# It also runs by itself whenever files in supabase/ change on main.
+name: Set up Supabase and AI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['supabase/**', 'scripts/supabase-setup.mjs', '.github/workflows/supabase.yml']
+
+concurrency:
+  group: supabase-setup
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check your Supabase keys
+        id: check
+        run: node scripts/supabase-setup.mjs check
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Build or update the database
+        if: steps.check.outputs.ready == 'true'
+        run: node scripts/supabase-setup.mjs database
+
+      - name: Save keys to Supabase
+        if: steps.check.outputs.ready == 'true'
+        run: node scripts/supabase-setup.mjs secrets
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CONTACT_EMAIL: ${{ secrets.CONTACT_EMAIL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM: ${{ secrets.RESEND_FROM }}
+
+      - uses: supabase/setup-cli@v1
+        if: steps.check.outputs.ready == 'true'
+        with:
+          version: latest
+
+      - name: Deploy the AI agents
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          set -e
+          for fn in scan-ticket voice-assist dispute-helper delete-account; do
+            supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF" --use-api
+          done
+          for fn in camera-sync moderate-report commute-predict weekly-coach health; do
+            supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt
+          done
+          echo "✅ AI agents deployed" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install schedules and load cameras
+        if: steps.check.outputs.ready == 'true'
+        run: node scripts/supabase-setup.mjs schedules
