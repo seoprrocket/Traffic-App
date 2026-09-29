@@ -6,6 +6,14 @@
   publish = "www"
   command = "node scripts/write-config.mjs"
 
+# These values are public on purpose: the build writes them into www/js/config.js
+# (the Supabase URL and public key, the business name and contact email shown in the
+# Privacy Policy, and the public half of the notification keys). If any of them is
+# marked "secret" in Netlify, its secrets scan would block every deploy. Real secrets
+# (GOOGLE_MAPS_API_KEY, VAPID_PRIVATE_KEY) are still scanned.
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL,SUPABASE_ANON_KEY,TR_COMPANY,TR_CONTACT_EMAIL,VAPID_PUBLIC_KEY,VAPID_SUBJECT,GOOGLE_DAILY_LIMIT"
+
 # Optional features (Site configuration → Environment variables):
 #   GOOGLE_MAPS_API_KEY   live traffic for Plan a Drive (Google Routes API)
 #   GOOGLE_DAILY_LIMIT    max Google calls per day (default 400)
