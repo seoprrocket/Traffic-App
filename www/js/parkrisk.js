@@ -41,6 +41,7 @@ const REASONS = [
   [/EMERGENCY NO PARK|TEMPORARY|SPECIAL EVENT/, 'temp', 'Temporary "Emergency No Parking" signs for moves, filming and events. Look for paper signs on poles.'],
   [/RESIDENT|RPP|ZONE|PERMIT/, 'rpp', 'Residential permit block. Without that zone\'s sticker, the posted limit applies (often 2 hours on weekdays).'],
   [/METER|PAY ?STATION|MULTI.?SPACE|PAY ?BY|FAIL.*PAY|PARKING FEE/, 'meter', 'Meters are enforced. Pay by app (ParkMobile) and set the meter timer in Invictus Traffic Radar.'],
+  [/NO (PARKING|STOPPING|STANDING).*HOUR|SPECIFIC HOURS/, 'hours', 'No parking during the posted hours. Read the sign for the days and times before you leave the car.'],
   [/OVER ?TIME|TIME LIMIT|HOUR|EXCESS|LONGER THAN/, 'time', 'Time limits are enforced. Set a timer when you park.'],
   [/HYDRANT/, 'hydrant', 'Too close to a fire hydrant. Leave plenty of room.'],
   [/LOADING|COMMERCIAL|DELIVER|TRUCK/, 'loading', 'Loading zones are for commercial vehicles during the posted hours.'],
