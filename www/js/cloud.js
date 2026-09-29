@@ -44,8 +44,10 @@ export async function signOut() {
 }
 
 // ---------------------------------------------------------------- row mapping
+// Parking tickets keep "what for" in the type column ("Parking – Expired meter"), so no database change is needed.
+const splitType = (ty) => { const m = /^(Parking) – (.+)$/.exec(ty || ''); return m ? { type: m[1], violation: m[2] } : { type: ty, violation: '' }; };
 const toRow = {
-  tickets: (t) => ({ id: t.id, street: t.street, lat: t.lat, lng: t.lng, ticket_date: t.date || null, ticket_time: t.time || null, due_date: t.due || null, type: t.type,
+  tickets: (t) => ({ id: t.id, street: t.street, lat: t.lat, lng: t.lng, ticket_date: t.date || null, ticket_time: t.time || null, due_date: t.due || null, type: t.violation ? `${t.type} – ${t.violation}` : t.type,
     fine: t.fine || null, speed: t.speed || null, speed_limit: t.limit || null, notes: t.notes || null, alert_type: t.alertType || 'voice', shared: !!t.shared }),
   cameras: (c) => ({ id: c.id, name: c.name, lat: c.lat, lng: c.lng, kind: c.kind, speed_limit: c.limit || null, heading: c.heading ?? null, source: 'user' }),
   routes: (r) => ({ id: r.id, name: r.name, start_pt: r.start, end_pt: r.end, hit_count: r.hitCount ?? null, meters: r.meters ?? null, secs: r.secs ?? null,
@@ -58,7 +60,7 @@ const toRow = {
     started_at: new Date(t.startedAt).toISOString(), ended_at: new Date(t.endedAt).toISOString(), meters: t.meters, max_mph: t.maxMph, alerts: t.alerts || 0 }),
 };
 const fromRow = {
-  tickets: (r) => ({ id: r.id, street: r.street, lat: r.lat, lng: r.lng, date: r.ticket_date || '', time: (r.ticket_time || '').slice(0, 5), due: r.due_date || '', type: r.type,
+  tickets: (r) => ({ id: r.id, street: r.street, lat: r.lat, lng: r.lng, date: r.ticket_date || '', time: (r.ticket_time || '').slice(0, 5), due: r.due_date || '', ...splitType(r.type),
     fine: +r.fine || 0, speed: r.speed, limit: r.speed_limit, notes: r.notes || '', alertType: r.alert_type, shared: r.shared, created: Date.parse(r.created_at) }),
   cameras: (r) => ({ id: r.id, name: r.name, lat: r.lat, lng: r.lng, kind: r.kind, limit: r.speed_limit, heading: r.heading }),
   routes: (r) => ({ id: r.id, name: r.name, start: r.start_pt, end: r.end_pt, hitCount: r.hit_count, meters: r.meters, secs: r.secs, checked: r.checked_at ? Date.parse(r.checked_at) : null }),

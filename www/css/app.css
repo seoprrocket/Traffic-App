@@ -23,12 +23,14 @@ button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 a{color:var(--you)}
 :focus-visible{outline:2px solid var(--you);outline-offset:2px}
-.app{height:100%;display:grid;grid-template-rows:auto 1fr auto;padding-top:env(safe-area-inset-top,0px)}
+.app{height:100%;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr auto;padding-top:env(safe-area-inset-top,0px)}
 
-header{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+header{min-width:0;max-width:100vw;display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
 .brand{display:flex;flex-direction:column;min-width:0;flex:1}
 .brand h1{margin:0;font:700 24px/1 var(--display);letter-spacing:.02em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (max-width:420px){.brand h1{font-size:20px}}
+@media (max-width:374px){.brand h1{font-size:17px}}
+.brand .kicker{display:block;font:700 11px/1.1 var(--sans,inherit);letter-spacing:.18em;color:var(--danger);margin-bottom:2px}
 .brand small{color:var(--muted);font-size:12px}
 .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;background:var(--surface2);font-weight:600;font-size:13px;white-space:nowrap}
 .chip .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
@@ -271,3 +273,16 @@ body.hf .alert{top:auto;bottom:calc(128px + env(safe-area-inset-bottom,0px))}
 .small{font-size:13px}
 .cols.tall i{background:color-mix(in srgb,var(--you) 30%,var(--surface2))}
 .cols.tall i.pick{background:var(--you)}
+
+/* Parking ticket risk */
+.riskhead{display:flex;flex-direction:column;gap:4px;border-left:4px solid var(--line);padding:8px 12px;background:var(--surface2);border-radius:10px}
+.riskhead b{font:700 20px/1.1 var(--display);text-transform:uppercase;letter-spacing:.02em}
+.riskhead span{font-size:14px}
+.rsn{display:flex;flex-direction:column;gap:4px;padding:6px 0;border-bottom:1px solid var(--line)}
+.rsn small{color:var(--muted)}
+.rsnt{display:flex;justify-content:space-between;gap:10px;min-width:0}
+.rsnt>*:first-child{min-width:0;overflow-wrap:anywhere}
+.rsnt>span:last-child{flex:none;font-variant-numeric:tabular-nums;color:var(--muted)}
+.hrs{display:flex;align-items:flex-end;gap:2px;height:48px;margin-top:8px}
+.hrs span{flex:1;min-height:2px;background:var(--warn);border-radius:2px 2px 0 0}
+.hrsx{display:flex;justify-content:space-between;color:var(--muted)}

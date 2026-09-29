@@ -166,6 +166,7 @@ function check(cur) {
 
   const tr = st.ticketRadius * SX.f;
   for (const t of S.db.tickets) {
+    if (/^parking/i.test(t.type || '')) continue;   // parking tickets warn when you park, not while driving
     const d = dist(cur, t);
     geofence('t' + t.id, streetKey(t.street), 'Ticket zone', d <= tr, mph, t.limit);
     if (d <= tr && t.limit && d < limitD) { limitD = d; limitNear = t.limit; }

@@ -5,7 +5,7 @@ import { map, drawMarkers, placeMe, fitAll } from './mapview.js';
 import { E, startDrive, stopDrive, overBy } from './engine.js';
 import { locateOnce, unlockAudio, isNative } from './native.js';
 import { initAuth, flush, loadCommunity, loadOfficialCameras, vote, loadAgentOutputs, cloudConfigured } from './cloud.js';
-import { addChooser, scanTicket, reportForm, ticketFields, readTicket, locWidget, pageHead, bindBack, geoFail } from './ui.js';
+import { addChooser, scanTicket, reportForm, ticketFields, readTicket, bindTicketType, locWidget, pageHead, bindBack, geoFail } from './ui.js';
 import { renderList, renderStats, renderMore } from './pages-main.js';
 import { renderDrive, tripTick, paintEta } from './trip.js';
 import { renderParking } from './parking.js';
@@ -21,7 +21,7 @@ function renderAdd() {
   const host = $('#p-add');
   if (host.dataset.built) return;            // keep what was typed while picking on the map
   host.dataset.built = '1';
-  host.innerHTML = `${pageHead('Add Location', 'Log a spot where you got a speeding ticket')}
+  host.innerHTML = `${pageHead('Add Location', 'Log a spot where you got a ticket: speeding, camera or parking')}
     <div class="btns"><button class="btn" id="af-scan">📸 Scan the ticket instead</button></div>
     <form id="af" class="card sec">${ticketFields({ date: today(), type: 'Speed camera' }, 'af')}
       <label class="switch"><input type="checkbox" id="af-cam" checked><span><b>Also mark a camera here</b><small>Adds a camera pin with this speed limit, so you get the ${S.db.settings.lead}-minute warning.</small></span></label>
@@ -30,6 +30,7 @@ function renderAdd() {
   locWidget(host.querySelector('#af-loc'), addState, 'Address or intersection', (x) => {
     const el = host.querySelector('#af-street'); if (!el.value && x.label && !/^(My location|Pinned on map)$/.test(x.label)) el.value = x.label.split(',')[0];
   });
+  bindTicketType(host, 'af');
   host.querySelector('#af-scan').onclick = scanTicket;
   host.querySelector('#af').onsubmit = (e) => {
     e.preventDefault();

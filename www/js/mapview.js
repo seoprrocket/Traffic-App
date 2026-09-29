@@ -9,7 +9,7 @@ export { RCAT, RTYPES, rcat } from './reports.js';
 import { rcat } from './reports.js';
 
 export const pin = (color, emoji) => L.divIcon({ className: '', html: `<div class="m-pin" style="background:${color}"><span>${emoji}</span></div>`, iconSize: [34, 34], iconAnchor: [17, 34], popupAnchor: [0, -30] });
-export const icons = { ticket: pin('#d42a2a', '⚠️'), camera: pin('#d99100', '📷'), temp: pin('#1d6cf0', '📍') };
+export const icons = { parkTicket: pin('#7a3fd1', '🅿️'), ticket: pin('#d42a2a', '⚠️'), camera: pin('#d99100', '📷'), temp: pin('#1d6cf0', '📍') };
 export const reportIcon = (r) => { const c = rcat(r.type); return pin(c.c, c.e); };
 export const youIcon = () => L.divIcon({ className: '', html: '<div class="m-you"><i></i></div>', iconSize: [22, 22], iconAnchor: [11, 11] });
 
@@ -37,8 +37,9 @@ export function drawMarkers() {
   Object.values(layers).forEach((l) => { if (l !== layers.route && l !== layers.temp) l.clearLayers(); });
   const rr = S.db.settings.ticketRadius * sens().f;
   S.db.tickets.forEach((t) => {
-    L.circle([t.lat, t.lng], { radius: rr, color: '#d42a2a', weight: 1, fillOpacity: 0.08, renderer: canvas }).addTo(layers.tickets);
-    L.marker([t.lat, t.lng], { icon: icons.ticket }).bindPopup(`<b>${esc(t.street)}</b><br>${esc(t.type)} · ${esc(t.date)}<br>${t.fine ? money(t.fine) : ''}${t.speed ? ' · ' + t.speed + ' mph' : ''}${t.limit ? ' in a ' + t.limit : ''}`).addTo(layers.tickets);
+    const pk = /^parking/i.test(t.type || '');
+    if (!pk) L.circle([t.lat, t.lng], { radius: rr, color: '#d42a2a', weight: 1, fillOpacity: 0.08, renderer: canvas }).addTo(layers.tickets);
+    L.marker([t.lat, t.lng], { icon: pk ? icons.parkTicket : icons.ticket }).bindPopup(`<b>${esc(t.street)}</b><br>${esc(t.type)}${t.violation ? ': ' + esc(t.violation) : ''} · ${esc(t.date)}<br>${t.fine ? money(t.fine) : ''}${t.speed ? ' · ' + t.speed + ' mph' : ''}${t.limit ? ' in a ' + t.limit : ''}`).addTo(layers.tickets);
   });
   S.db.cameras.forEach((c) => {
     const m = L.marker([c.lat, c.lng], { icon: icons.camera, draggable: true }).bindPopup(cameraPopup(c)).addTo(layers.cameras);

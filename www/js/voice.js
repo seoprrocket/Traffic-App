@@ -8,6 +8,8 @@ import { postReport, undoReport, go } from './ui.js';
 import { agent } from './cloud.js';
 import { rcat } from './mapview.js';
 import { HAZARDS, sayType } from './reports.js';
+import { checkParkingAt } from './parking.js';
+import { spokenRisk } from './parkrisk.js';
 
 // ---------------------------------------------------------------- understanding simple commands on the phone
 const REPORT_WORDS = [
@@ -31,6 +33,7 @@ function understand(raw) {
   if (/(stop|end) (driving|drive|drive mode)|drive mode off/.test(t)) return { action: 'stop_drive' };
   if (/speed limit|how fast can i|what'?s the limit/.test(t)) return { speech: limitSummary() };
   if (/\b(share (my )?(drive|trip|location|eta)|send my eta)\b/.test(t)) return { action: 'share_drive' };
+  if (/\b(can i park|ok to park|okay to park|safe to park|good (place|spot) to park|parking tickets? (here|risk)|ticket risk)\b/.test(t)) return { action: 'park_check' };
   if (/\b(find|where can i) park(ing)?\b|\bparking near\b/.test(t)) return { action: 'find_parking' };
   if (/\b(when will i (get there|arrive)|what'?s my eta|how long (until|till) i)\b/.test(t)) return { speech: etaSummary() };
   if (/(what'?s|anything|any cameras?|anything) (ahead|coming up|up ahead)|next camera/.test(t)) return { speech: aheadSummary() };
@@ -81,6 +84,13 @@ export async function voiceCommand() {
     if (r.action === 'report') { await doReport(r.report_type || 'Other', r.report_note); return; }
     if (r.action === 'share_drive') { bus.emit('share-drive'); return; }
     if (r.action === 'find_parking') { bus.emit('go', 'parking'); return; }
+    if (r.action === 'park_check') {
+      if (!E.me) { speak('I need your location first. Start drive mode or tap locate.'); return; }
+      speak('Checking parking tickets here.');
+      const res = await checkParkingAt(E.me, 'you');
+      speak(res.error ? res.error : spokenRisk(res) || 'There\'s no parking ticket data for this area. Read the signs before you leave the car.');
+      return;
+    }
     if (r.speech) speak(r.speech);
   } catch (e) { toast(e.message || 'Voice failed'); }
   finally { listening = false; document.body.classList.remove('listening'); }

@@ -40,7 +40,7 @@ export function renderList() {
   if (listKind === 'tickets') {
     const rows = [...S.db.tickets].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     host.innerHTML = rows.length ? rows.map((t) => `<div class="row t"><div class="main"><div class="ttl">${esc(t.street)}${t.example ? '<span class="tag">Example</span>' : ''}${t.shared ? '<span class="tag">Shared</span>' : ''}</div>
-      <div class="meta">${esc(t.type)} · ${esc(t.date || 'no date')}${t.time ? ' ' + esc(t.time) : ''} · ${t.fine ? money(t.fine) : 'no fine'}${t.speed ? ' · ' + t.speed + ' mph' : ''}${t.limit ? ' in ' + t.limit : ''}</div>
+      <div class="meta">${esc(t.type)}${t.violation ? ': ' + esc(t.violation) : ''} · ${esc(t.date || 'no date')}${t.time ? ' ' + esc(t.time) : ''} · ${t.fine ? money(t.fine) : 'no fine'}${t.speed ? ' · ' + t.speed + ' mph' : ''}${t.limit ? ' in ' + t.limit : ''}</div>
       ${t.due ? `<div class="meta">Pay or contest by <b>${esc(t.due)}</b></div>` : ''}${t.notes ? `<div class="meta">${esc(t.notes)}</div>` : ''}</div>
       <div class="acts"><button class="sbtn" data-go="${t.id}">Map</button><button class="sbtn" data-disp="${t.id}">Dispute help</button><button class="sbtn" data-ed="${t.id}">Edit</button><button class="sbtn danger" data-del="${t.id}">Delete</button></div></div>`).join('')
       : '<div class="empty">No tickets yet. Tap the red + on the map to scan or add your first one.</div>';
@@ -118,7 +118,7 @@ export async function analyzeRoute(A, B) {
   const cum = [0]; for (let i = 1; i < line.length; i++) cum.push(cum[i - 1] + dist(line[i - 1], line[i]));
   const hits = [], W = fallback ? 400 : 60;
   allCameras().forEach((c) => { const n = nearRoute(c, line); if (n.d <= W) hits.push({ k: 'c', at: cum[n.idx], title: c.name, sub: `${c.kind} camera${c.limit ? ' · limit ' + c.limit : ''}` }); });
-  S.db.tickets.forEach((t) => { const n = nearRoute(t, line); if (n.d <= Math.max(W, 120)) hits.push({ k: 't', at: cum[n.idx], title: streetKey(t.street), sub: `You got a ${String(t.type).toLowerCase()} ticket here${t.fine ? ' · ' + money(t.fine) : ''}` }); });
+  S.db.tickets.filter((t) => !/^parking/i.test(t.type || '')).forEach((t) => { const n = nearRoute(t, line); if (n.d <= Math.max(W, 120)) hits.push({ k: 't', at: cum[n.idx], title: streetKey(t.street), sub: `You got a ${String(t.type).toLowerCase()} ticket here${t.fine ? ' · ' + money(t.fine) : ''}` }); });
   activeReports().forEach((r) => { const n = nearRoute(r, line); if (n.d <= Math.max(W, 150)) hits.push({ k: 'r', at: cum[n.idx], title: r.type, sub: ago(r.time) + (r.note ? ' · ' + r.note : '') }); });
   hits.sort((a, b) => a.at - b.at);
   return { line, meters, secs, fallback, hits };

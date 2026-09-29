@@ -26,6 +26,7 @@ function coachTips() {
     const ty = types[0][0];
     if (/red light/i.test(ty)) tips.push({ lvl: 'md', t: 'Red lights are your main issue', p: 'Cameras photograph entering after the light turns red and rolling right turns. Near a known camera, cover the brake on a stale green.' });
     if (/stop sign/i.test(ty)) tips.push({ lvl: 'md', t: 'Stop-sign cameras catch rolling stops', p: 'Come to a full stop behind the line until the car stops rocking, then go.' });
+    if (/^parking/i.test(ty)) tips.push({ lvl: 'md', t: 'Parking is your main ticket type', p: 'Use Parking → Can I park here? before you walk away. It shows why tickets get written on that block and when. Set the meter timer when you park.' });
     if (/bus lane/i.test(ty)) tips.push({ lvl: 'md', t: 'Watch the red-painted lanes', p: 'Bus-lane cameras ticket driving or stopping in the lane during posted hours.' });
   }
   const hours = T.filter((t) => t.time).map((t) => +t.time.slice(0, 2));
@@ -99,6 +100,13 @@ const LIB = [
     'Stop fully behind the line until the car stops moving, then proceed.',
     'Do not enter an intersection or crosswalk unless you can clear it before the light changes.',
     'Red-painted lanes are for buses during posted hours. Driving or stopping in them can be ticketed.']],
+  ['Parking without a ticket', [
+    'Before you leave the car, open Parking → Can I park here? It shows how many tickets get written on that block, what for, and at what times.',
+    'Read every sign on the pole, top to bottom. The most limiting sign wins, and rush-hour and street-sweeping limits often sit below the main sign.',
+    'Look for paper "Emergency No Parking" signs on poles and trees. They go up days ahead for moves and events, and cars get ticketed and towed.',
+    'In residential permit zones, cars without that zone\'s sticker get a time limit, often 2 hours on weekdays. Set the meter timer so you move in time.',
+    'Leave room at hydrants, crosswalks, corners, driveways and alleys. These get ticketed at any hour.',
+    'A garage or lot costs more than a meter but can\'t get a street ticket. On red blocks, it\'s usually cheaper than the fine.']],
   ['If you get a ticket', [
     'Read the notice right away. It lists the violation, the fine and the deadline to pay or dispute.',
     'In DC you pay or contest camera tickets through the DC DMV. In Maryland, follow the instructions from the county or town on the notice. Missing the deadline can add penalties.',

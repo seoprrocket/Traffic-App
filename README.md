@@ -24,6 +24,7 @@ netlify.toml         Only used if Netlify deploys from GitHub
 | "Time to leave" and parking-meter notifications with the app closed | Netlify Functions + notification keys |
 | Live ETA and Share drive link | Netlify Functions |
 | Parking: find garages and lots, save your spot with photo and meter timer, walk back | Nothing extra |
+| Parking tickets: "Can I park here?" check (tickets a month, why, busiest times), ticket-heavy blocks on the map, a warning when you park somewhere risky, and logging your own parking tickets | Nothing extra. Data covers DC and Montgomery County's parking districts |
 | Accounts, sync, community map, AI scanner/coach/dispute help | Supabase |
 
 ## Quick start
@@ -97,6 +98,16 @@ Add another county or town with one line in the SQL editor:
 `insert into camera_sources (jurisdiction, url) values ('Rockville, MD', 'https://…');`
 
 If you built the database before Maryland was added, the setup dashboard (step 3) shows a **Copy Maryland update** button. Run that SQL, then redeploy camera-sync with `npx supabase functions deploy camera-sync --no-verify-jwt`.
+
+## Parking ticket data
+
+| Area | Source | Notes |
+|---|---|---|
+| Washington, DC | DC's monthly "Parking Violations" tables on the city GIS server | Every ticket has a block location and a 24-hour time. The app uses the 3 most recent months that have been published (usually 1–2 months behind). |
+| Montgomery County (Bethesda, Silver Spring, Wheaton parking districts) | County DOT parking tickets (data.montgomerycountymd.gov, `uyb2-cfmc`) | Matched by street name and house number (about two blocks either way). The county's times have no AM/PM, so only busiest days are shown. The county updates this list about once a year. |
+| Other Maryland towns (Gaithersburg, Rockville and others) | Not published | The app says so, shows the parking checklist, and still warns you near your own logged parking tickets. |
+
+Parking tickets you log don't trigger driving alerts. You're warned when you save a parking spot near one instead.
 
 ## Netlify settings (Site configuration → Environment variables)
 

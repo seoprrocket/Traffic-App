@@ -92,13 +92,15 @@ export function addChooser() {
 
 // ---------------------------------------------------------------- ticket form
 export const TYPES = ['Speed camera', 'Red light camera', 'Stop sign camera', 'Speed (officer)', 'Bus lane', 'Parking', 'Other'];
+export const PARKING_REASONS = ['Expired meter', 'Over the time limit', 'Residential permit zone', 'Rush-hour / tow-away zone', 'Street sweeping', 'Emergency or temporary no parking', 'No parking / no standing', 'Too close to a fire hydrant', 'Loading or bus zone', 'Crosswalk, corner, driveway or alley', 'Expired tags or registration', 'Other'];
+const isParking = (t) => /^parking/i.test(t || '');
 export const ATYPES = [['visual', 'Visual popup only'], ['sound', 'Popup + warning sound'], ['voice', 'Popup + sound + spoken warning']];
 export const atOpts = (sel) => ATYPES.map(([k, l]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${l}</option>`).join('');
 
 export function ticketFields(d, px) {
   return `<label class="f">Street name (how you'll recognize it)<input type="text" id="${px}-street" required maxlength="160" value="${esc(d.street || '')}" placeholder="e.g. New York Ave NE"></label>
     <div class="loc" id="${px}-loc"></div>
-    <div class="grid3">
+    <div class="grid3 mvonly"${isParking(d.type) ? ' hidden' : ''}>
       <label class="f">Speed limit<input type="number" id="${px}-limit" inputmode="numeric" min="0" max="100" value="${d.limit ?? ''}"></label>
       <label class="f">Your speed<input type="number" id="${px}-speed" inputmode="numeric" min="0" max="200" value="${d.speed ?? ''}"></label>
       <label class="f">Fine ($)<input type="number" id="${px}-fine" inputmode="decimal" min="0" value="${d.fine ?? ''}"></label>
@@ -107,6 +109,10 @@ export function ticketFields(d, px) {
       <label class="f">Date<input type="date" id="${px}-date" value="${esc(d.date || '')}"></label>
       <label class="f">Time<input type="time" id="${px}-time" value="${esc(d.time || '')}"></label>
       <label class="f">Type<select id="${px}-type">${TYPES.map((x) => `<option${x === d.type ? ' selected' : ''}>${x}</option>`).join('')}</select></label>
+    </div>
+    <div class="grid2 pkonly"${isParking(d.type) ? '' : ' hidden'}>
+      <label class="f">What for<select id="${px}-viol"><option value="">Choose…</option>${PARKING_REASONS.map((x) => `<option${x === d.violation ? ' selected' : ''}>${x}</option>`).join('')}</select></label>
+      <label class="f">Fine ($)<input type="number" id="${px}-pfine" inputmode="decimal" min="0" value="${d.fine ?? ''}"></label>
     </div>
     <div class="grid2">
       <label class="f">Pay or contest by<input type="date" id="${px}-due" value="${esc(d.due || '')}"></label>
@@ -119,10 +125,22 @@ export function readTicket(root, px, st, rec) {
   const g = (id) => root.querySelector(`#${px}-${id}`);
   Object.assign(rec, {
     street: g('street').value.trim(), lat: st.lat, lng: st.lng, date: g('date').value, time: g('time').value, due: g('due').value, type: g('type').value,
-    fine: +g('fine').value || 0, speed: +g('speed').value || null, limit: +g('limit').value || null, notes: g('notes').value.trim(),
+    fine: +(isParking(g('type').value) ? g('pfine') : g('fine')).value || 0, notes: g('notes').value.trim(),
+    speed: isParking(g('type').value) ? null : +g('speed').value || null, limit: isParking(g('type').value) ? null : +g('limit').value || null,
+    violation: isParking(g('type').value) ? g('viol').value : '',
     alertType: g('at').value, shared: g('share').checked,
   });
   delete rec.example; return rec;
+}
+/** Parking tickets ask "what for" instead of speed; keeps the two fine boxes in sync. */
+export function bindTicketType(root, px) {
+  const ty = root.querySelector(`#${px}-type`), f1 = root.querySelector(`#${px}-fine`), f2 = root.querySelector(`#${px}-pfine`);
+  const sync = () => { const p = isParking(ty.value); root.querySelector('.mvonly').hidden = p; root.querySelector('.pkonly').hidden = !p;
+    const cam = root.querySelector(`#${px}-cam`)?.closest('label'); if (cam) cam.hidden = !/camera/i.test(ty.value);
+    const notes = root.querySelector(`#${px}-notes`); if (notes) notes.placeholder = p ? 'Sign said 2 hr parking 7am–6:30pm, zone 2' : 'Camera is on the light pole past the bridge'; };
+  ty.addEventListener('change', sync);
+  f1.addEventListener('input', () => { f2.value = f1.value; }); f2.addEventListener('input', () => { f1.value = f2.value; });
+  sync();
 }
 const autoName = (el, x) => { if (!el.value && x.label && x.label !== 'My location' && x.label !== 'Pinned on map') el.value = x.label.split(',')[0]; };
 
@@ -138,6 +156,7 @@ export function ticketForm(t, preset) {
         : `<label class="switch"><input type="checkbox" id="tf-cam" checked><span><b>Also mark a camera here</b><small>So you get the ${S.db.settings.lead}-minute warning next time.</small></span></label>`) : ''}
       <button class="btn primary" type="submit">${t ? 'Save changes' : 'Save ticket'}</button></form>`, (s) => {
     locWidget(s.querySelector('#tf-loc'), st, 'Where exactly', (x) => autoName(s.querySelector('#tf-street'), x));
+    bindTicketType(s, 'tf');
     s.querySelector('#tf').onsubmit = (e) => {
       e.preventDefault();
       if (st.lat == null) { toast('Set the location: search, use GPS, or pick on the map'); return; }
@@ -147,7 +166,7 @@ export function ticketForm(t, preset) {
         upsertLocal('cameras', { id: uuid(), name: rec.street, lat: rec.lat, lng: rec.lng, kind: rec.type.replace(/ camera$/i, ''), limit: rec.limit, heading: preset?.heading ?? null });
       }
       bus.emit('ticket-saved', rec);
-      closeSheet(); toast(t ? 'Ticket updated' : 'Ticket saved. You\'ll get a caution alert here.');
+      closeSheet(); toast(t ? 'Ticket updated' : isParking(rec.type) ? 'Parking ticket saved. You\'ll be warned when you park near here.' : 'Ticket saved. You\'ll get a caution alert here.');
       go('map'); map.setView([rec.lat, rec.lng], 16);
     };
   });
