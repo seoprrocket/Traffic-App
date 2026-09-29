@@ -1,0 +1,16 @@
+# Netlify reads this file automatically, including with drag-and-drop deploys.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(self), microphone=(self), camera=(self)
+  X-Frame-Options: SAMEORIGIN
+
+/sw.js
+  Cache-Control: no-cache
+
+/js/config.js
+  Cache-Control: no-cache
+
+/setup.html
+  X-Robots-Tag: noindex
+  Cache-Control: no-cache

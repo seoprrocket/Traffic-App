@@ -1,0 +1,6 @@
+# Used when Netlify deploys from GitHub (not needed for drag-and-drop).
+# Set these in Netlify → Site configuration → Environment variables, and config.js is written for you:
+#   SUPABASE_URL, SUPABASE_ANON_KEY, TR_COMPANY, TR_CONTACT_EMAIL
+[build]
+  publish = "www"
+  command = "node scripts/write-config.mjs"

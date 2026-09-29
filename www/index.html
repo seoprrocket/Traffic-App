@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0e1720">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="description" content="Speed-camera and ticket-zone warnings for Washington DC, Maryland and Virginia drivers.">
+<title>Ticket Radar DC</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="vendor/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><h1>Ticket Radar</h1><small>Washington, DC</small></div>
+    <button class="chip" id="driveBtn" aria-pressed="false"><span class="dot"></span><span id="driveLbl">Start drive</span></button>
+    <button class="iconbtn" id="setBtn" aria-label="Settings">⚙︎</button>
+  </header>
+
+  <main>
+    <section class="view mapview" id="view-map">
+      <div id="map" class="mapbox"></div>
+      <div class="speedo" id="speedo" hidden>
+        <div class="sign" id="spdSign"><b>YOUR SPEED</b><i id="spdVal">0</i></div>
+        <div class="sign" id="limSign" hidden><b>SPEED LIMIT</b><i id="limVal">25</i></div>
+      </div>
+      <div class="maptools">
+        <button id="locBtn" aria-label="Center on me">◎</button>
+        <button id="fitBtn" aria-label="Show all markers">⤢</button>
+        <button id="hfBtn" aria-label="Hands-free screen">▣</button>
+        <button id="micBtn" class="mic" aria-label="Voice command" hidden>🎤</button>
+      </div>
+      <div class="legend">
+        <div><span class="sw" style="background:var(--you);border-radius:50%"></span>You</div>
+        <div><span class="sw" style="background:var(--danger)"></span>Ticket spot</div>
+        <div><span class="sw" style="background:var(--warn)"></span>Camera</div>
+        <div><span class="sw" style="background:var(--report)"></span>Community</div>
+      </div>
+      <div class="pickbar" id="pickbar" hidden>Tap the map where it is <button id="pickCancel">Cancel</button></div>
+      <button class="fab" id="fab" aria-label="Add ticket, camera or report">+</button>
+    </section>
+
+    <section class="view" id="view-list" hidden><div class="wrap">
+      <div class="seg" id="listSeg">
+        <button data-k="tickets" aria-pressed="true">Tickets</button>
+        <button data-k="cameras" aria-pressed="false">Cameras</button>
+      </div>
+      <div class="sec" id="listBody"></div>
+    </div></section>
+
+    <section class="view" id="view-stats" hidden><div class="wrap" id="statsBody"></div></section>
+
+    <section class="view" id="view-route" hidden><div class="wrap">
+      <div class="card">
+        <h2>Safe Route Planner</h2>
+        <p class="note" style="margin:0 0 12px">Check a trip for your ticket spots, known cameras and fresh community reports before you drive.</p>
+        <div class="sec">
+          <div class="loc" id="routeStart"></div>
+          <div class="loc" id="routeEnd"></div>
+          <button class="btn primary" id="routeGo">Check this route</button>
+        </div>
+      </div>
+      <div class="sec" id="routeOut"></div>
+    </div></section>
+
+    <section class="view" id="view-more" hidden><div class="wrap" id="moreBody"></div></section>
+
+    <section class="view" id="view-add-location" hidden><div class="wrap" id="p-add"></div></section>
+    <section class="view" id="view-driver-profile" hidden><div class="wrap" id="p-profile"></div></section>
+    <section class="view" id="view-account" hidden><div class="wrap" id="p-account"></div></section>
+    <section class="view mapview" id="view-community-map" hidden>
+      <div id="cmap" class="mapbox"></div>
+      <div class="mapchips" id="cmapChips"></div>
+      <div class="mapnote" id="cmapNote"></div>
+      <button class="fab" id="cmapFab" aria-label="Report a sighting" style="bottom:64px">+</button>
+    </section>
+    <section class="view" id="view-driving-coach" hidden><div class="wrap" id="p-coach"></div></section>
+    <section class="view" id="view-dispute" hidden><div class="wrap" id="p-dispute"></div></section>
+    <section class="view" id="view-reporting-feed" hidden><div class="wrap" id="p-feed"></div></section>
+    <section class="view" id="view-saved-routes" hidden><div class="wrap" id="p-routes"></div></section>
+    <section class="view" id="view-data-export" hidden><div class="wrap" id="p-export"></div></section>
+    <section class="view" id="view-safety-tips" hidden><div class="wrap" id="p-tips"></div></section>
+    <section class="view" id="view-alert-log" hidden><div class="wrap" id="p-log"></div></section>
+    <section class="view" id="view-my-contributions" hidden><div class="wrap" id="p-contrib"></div></section>
+    <section class="view mapview" id="view-risk-heatmap" hidden>
+      <div id="hmap" class="mapbox"></div>
+      <div class="mapchips" id="hmapChips"></div>
+      <div class="mapnote" id="hmapNote"></div>
+    </section>
+    <section class="view" id="view-commute-schedules" hidden><div class="wrap" id="p-commute"></div></section>
+    <section class="view" id="view-privacy" hidden><div class="wrap" id="p-privacy"></div></section>
+    <section class="view" id="view-terms" hidden><div class="wrap" id="p-terms"></div></section>
+  </main>
+
+  <nav role="tablist">
+    <button data-v="map" aria-selected="true"><span>🗺</span>Map</button>
+    <button data-v="list" aria-selected="false"><span>☰</span>List</button>
+    <button data-v="stats" aria-selected="false"><span>📊</span>Stats</button>
+    <button data-v="route" aria-selected="false"><span>↗</span>Route</button>
+    <button data-v="more" aria-selected="false"><span>⋯</span>More</button>
+  </nav>
+</div>
+
+<!-- Hands-free driving screen -->
+<div id="handsfree" hidden>
+  <div class="hf-top"><button id="hf-map">Show map</button><button id="hf-stop">Stop drive</button></div>
+  <div class="hf-mid">
+    <div class="hf-speed"><span id="hf-speed">–</span><small>MPH</small></div>
+    <div id="hf-limit" hidden><span>SPEED LIMIT</span><b></b></div>
+    <div id="hf-next"></div>
+  </div>
+  <div class="hf-btns">
+    <button id="hf-voice"><span>🎤</span>Voice</button>
+    <button id="hf-police"><span>🚓</span>Police</button>
+    <button id="hf-hazard"><span>🚧</span>Hazard</button>
+  </div>
+</div>
+<div id="layer"></div>
+
+<script src="vendor/leaflet.js"></script>
+<script src="vendor/leaflet-heat.js"></script>
+<script src="vendor/supabase.js"></script>
+<script src="js/config.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

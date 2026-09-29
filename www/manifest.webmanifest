@@ -1,0 +1,10 @@
+{
+  "name": "Ticket Radar DC",
+  "short_name": "Ticket Radar",
+  "description": "Speed-camera and ticket-zone warnings for DC, Maryland and Virginia drivers.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0e1720",
+  "theme_color": "#0e1720",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
