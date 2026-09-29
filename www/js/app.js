@@ -9,6 +9,7 @@ import { addChooser, scanTicket, reportForm, ticketFields, readTicket, bindTicke
 import { renderList, renderStats, renderMore } from './pages-main.js';
 import { renderDrive, tripTick, paintEta } from './trip.js';
 import { renderParking } from './parking.js';
+import { renderImport } from './importer.js';
 import { renderCommunityMap, renderFeed, renderContrib, renderHeat } from './pages-community.js';
 import { renderRoutes, renderCommutes, commuteCheck } from './pages-plan.js';
 import { renderCoach, renderTips, renderDispute } from './pages-learn.js';
@@ -50,7 +51,7 @@ function renderAdd() {
 const TABS = ['map', 'list', 'stats', 'route', 'more'];
 const PAGES = {
   'add-location': { t: 'Add Location', e: '➕', d: 'Log a ticket spot by address', g: 'Log', r: renderAdd },
-  'scan': { t: 'Scan a Ticket', e: '📸', d: 'Photo of the notice fills it all in', g: 'Log', act: scanTicket },
+  'import': { t: 'Import Tickets', e: '📥', d: 'From cite-web.com, screenshots, photos or PDFs', g: 'Log', r: renderImport },
   'parking': { t: 'Parking', e: '🅿️', d: 'Find a spot, mark where you parked', g: 'Plan', r: renderParking },
   'saved-routes': { t: 'Saved Routes', e: '🧭', d: 'Your frequent trips, pre-checked', g: 'Plan', r: renderRoutes },
   'commute-schedules': { t: 'Commute Schedules', e: '🗓', d: 'Warnings before you leave', g: 'Plan', r: renderCommutes },

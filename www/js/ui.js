@@ -83,7 +83,7 @@ map.on('click', (e) => {
 export function addChooser() {
   openSheet(`${head('Add')}
   <div class="choice">
-   <button data-k="scan"><span class="ic" style="background:var(--you)">📸</span><span><b>Scan a ticket</b><small>Photo or PDF of the notice. The app fills everything in.</small></span></button>
+   <button data-k="scan"><span class="ic" style="background:var(--you)">📸</span><span><b>Scan or import tickets</b><small>Photo of the notice, a screenshot from cite-web.com or another ticket site, a PDF, or pasted text.</small></span></button>
    <button data-k="ticket"><span class="ic" style="background:var(--danger)">⚠️</span><span><b>Type in a ticket</b><small>Street, fine, speed. You'll get a caution alert on this street.</small></span></button>
    <button data-k="camera"><span class="ic" style="background:var(--warn)">📷</span><span><b>Camera location</b><small>Pin it exactly. You'll get a ${S.db.settings.lead}-minute warning.</small></span></button>
    <button data-k="report"><span class="ic" style="background:var(--report)">📣</span><span><b>Report a sighting</b><small>Police, ICE activity, icy road, new camera, hazard.</small></span></button>
@@ -167,6 +167,7 @@ export function ticketForm(t, preset) {
       }
       bus.emit('ticket-saved', rec);
       closeSheet(); toast(t ? 'Ticket updated' : isParking(rec.type) ? 'Parking ticket saved. You\'ll be warned when you park near here.' : 'Ticket saved. You\'ll get a caution alert here.');
+      if (preset?.onSaved) { preset.onSaved(rec); return; }
       go('map'); map.setView([rec.lat, rec.lng], 16);
     };
   });
@@ -254,45 +255,5 @@ export function reportForm(r) {
 }
 
 // ---------------------------------------------------------------- ticket scanner
-async function shrink(file) {
-  if (file.type === 'application/pdf') return { data: await b64(file), mediaType: 'application/pdf' };
-  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
-  const k = Math.min(1, 2000 / Math.max(img.width, img.height));
-  const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-  URL.revokeObjectURL(img.src);
-  return { data: c.toDataURL('image/jpeg', 0.85).split(',')[1], mediaType: 'image/jpeg' };
-}
-function b64(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(file); }); }
-
-export function scanTicket() {
-  if (!cloudConfigured) { toast('Scanning needs the Supabase backend. See the setup guide.'); return; }
-  if (!S.user) { toast('Sign in first to scan tickets'); go('account'); return; }
-  openSheet(`${head('Scan a ticket')}
-    <p class="note" style="margin:0">Take a clear photo of the front of the notice, flat and in good light. The photo is read once and not stored. Plate and notice numbers are ignored.</p>
-    <div class="btns"><label class="btn primary">Take photo<input type="file" id="sc-cam" accept="image/*" capture="environment" hidden></label>
-      <label class="btn">Choose photo or PDF<input type="file" id="sc-file" accept="image/*,application/pdf" hidden></label></div>
-    <div id="sc-status" class="note"></div>`, (s) => {
-    const run = async (f) => {
-      if (!f) return;
-      const status = s.querySelector('#sc-status');
-      status.innerHTML = '<div class="spinner"></div> Reading the ticket…';
-      try {
-        const payload = await shrink(f);
-        if (payload.data.length > 9000000) throw new Error('That file is too large. Use a photo under 6 MB.');
-        const out = await agent('scan-ticket', payload);
-        if (!out.ok) { status.textContent = out.message; return; }
-        const tk = out.ticket;
-        ticketForm(null, {
-          ticket: { street: tk.street || '', type: tk.type, date: tk.date || '', time: tk.time || '', speed: tk.speed, limit: tk.limit, fine: tk.fine, due: tk.due || '',
-            notes: [tk.jurisdiction, tk.direction && `Direction: ${tk.direction}`].filter(Boolean).join(' · ') },
-          location: out.location ? { lat: out.location.lat, lng: out.location.lng, label: out.location.label } : null,
-          camera: out.camera, confidence: out.confidence,
-          note: out.location ? out.note : `${out.note} We couldn't place it on the map, so set the location below.`,
-        });
-      } catch (e) { status.textContent = e.message; }
-    };
-    s.querySelector('#sc-cam').onchange = (e) => run(e.target.files[0]);
-    s.querySelector('#sc-file').onchange = (e) => run(e.target.files[0]);
-  });
-}
+/** Scanning and importing live on the Import Tickets page (photos, screenshots, PDFs, pasted text). */
+export function scanTicket() { closeSheet(); go('import'); }

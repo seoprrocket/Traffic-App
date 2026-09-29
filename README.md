@@ -25,6 +25,7 @@ netlify.toml         Only used if Netlify deploys from GitHub
 | Live ETA and Share drive link | Netlify Functions |
 | Parking: find garages and lots, save your spot with photo and meter timer, walk back | Nothing extra |
 | Parking tickets: "Can I park here?" check (tickets a month, why, busiest times), ticket-heavy blocks on the map, a warning when you park somewhere risky, and logging your own parking tickets | Nothing extra. Data covers DC and Montgomery County's parking districts |
+| Import tickets: screenshots from cite-web.com or any ticket website, photos of notices, PDFs, or pasted text (several at once), placed on the map automatically | Pasted text and screenshots: nothing extra (read on the phone). Photos of paper and PDFs: the AI scanner (Supabase) |
 | Accounts, sync, community map, AI scanner/coach/dispute help | Supabase |
 
 ## Quick start
@@ -73,7 +74,7 @@ In about 3 minutes it builds or updates the database, saves the keys in Supabase
 
 | Agent | Runs | Does |
 |---|---|---|
-| scan-ticket | When you scan | Reads a ticket photo, fills in the form, places it on the map, and matches the official camera. Plate and notice numbers are ignored, and the photo isn't stored. |
+| scan-ticket | When you scan or import | Reads a ticket photo, PDF, website screenshot or pasted page text (up to 20 tickets at once), places each on the map, and matches the official camera. Plate, notice and citation numbers and PINs are ignored, and nothing is stored. |
 | voice-assist | Voice questions that aren't simple commands | Answers "is anything ahead on Wisconsin?" from nearby cameras, your tickets and live reports. Simple commands ("report police", "what's ahead", "speed limit", "undo") run on the phone with no AI call. |
 | moderate-report | Every new or edited report | Removes names, plates and phone numbers; hides threats, harassment and spam; merges duplicate reports. |
 | camera-sync | Daily at 5:15 am ET | Loads the official lists from DC, Montgomery County and Prince George's County, plus the county and town pages in `camera_sources` (Baltimore City, Anne Arundel, Howard, Calvert and Gaithersburg to start). |
@@ -98,6 +99,10 @@ Add another county or town with one line in the SQL editor:
 `insert into camera_sources (jurisdiction, url) values ('Rockville, MD', 'https://…');`
 
 If you built the database before Maryland was added, the setup dashboard (step 3) shows a **Copy Maryland update** button. Run that SQL, then redeploy camera-sync with `npx supabase functions deploy camera-sync --no-verify-jwt`.
+
+## Importing from cite-web.com
+
+cite-web.com is the payment site many camera programs use. It has no list of all your tickets: you log in to each ticket with the citation number and PIN printed on that notice. So the app doesn't log in for you. Open the ticket there, then take a screenshot (or copy the page text) and add it on **More → Import Tickets**. Duplicates are flagged, and anything the app can't place on the map waits for you to set the spot.
 
 ## Parking ticket data
 

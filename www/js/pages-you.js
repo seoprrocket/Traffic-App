@@ -281,6 +281,7 @@ export function renderPrivacy() {
     <ul><li><b>Plan a Drive:</b> your start and destination are sent to the site's server, which asks Google's Routes service for drive times with traffic. Saved trips you want notifications for are kept on the server (with an anonymous id for your phone) until an hour after the arrival time.</li>
       <li><b>Share drive:</b> while you share, your location, speed, destination name and arrival time are stored on the server and shown to anyone with the link. The link stops working 30 minutes after you end the trip, and at most 4 hours after your last update.</li>
       <li><b>Parking:</b> your saved spot, note and photo stay on your phone. A meter reminder sends only its time and message to the server.</li>
+      <li><b>Importing tickets:</b> pasted text and screenshots read on your phone stay on your phone. With the AI scanner, the picture is sent to be read once and isn't stored. The street is looked up on OpenStreetMap to place it on the map. Plate numbers, citation numbers and PINs are not saved.</li>
       <li><b>Parking ticket check:</b> the spot you check is sent to the DC government's map service, or for Montgomery County to OpenStreetMap (to find the street name) and the county's open-data site. Nothing else about you is sent.</li>
       <li><b>Road warnings and parking search</b> send the area around you to OpenStreetMap's Overpass service.</li></ul>
     <h3>AI processing</h3>
