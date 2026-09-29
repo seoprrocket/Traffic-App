@@ -17,6 +17,7 @@ export const sb = cloudConfigured
 // ---------------------------------------------------------------- auth
 export async function initAuth() {
   if (!sb) return;
+  await fromEmailLink();
   const { data } = await sb.auth.getSession();
   setUser(data.session?.user || null);
   sb.auth.onAuthStateChange((_e, session) => setUser(session?.user || null));
@@ -29,8 +30,32 @@ function setUser(u) {
     if (u) syncNow();
   }
 }
+/** Signing in by tapping the link in the email: the link comes back to the app with the session in the address. */
+async function fromEmailLink() {
+  const h = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const q = new URLSearchParams(location.search);
+  const clean = () => history.replaceState(null, '', location.pathname + '#account');
+  try {
+    if (h.get('access_token') && h.get('refresh_token')) {
+      const { error } = await sb.auth.setSession({ access_token: h.get('access_token'), refresh_token: h.get('refresh_token') });
+      clean();
+      if (error) throw error;
+      if (!S.db.acceptedTerms) { S.db.acceptedTerms = Date.now(); persist(); }
+      setTimeout(() => { toast('Signed in. Syncing your data…'); bus.emit('go', 'account'); }, 300);
+    } else if (q.get('code')) {
+      const { error } = await sb.auth.exchangeCodeForSession(q.get('code'));
+      clean();
+      if (error) throw error;
+      setTimeout(() => { toast('Signed in. Syncing your data…'); bus.emit('go', 'account'); }, 300);
+    } else if (h.get('error') || q.get('error')) {
+      const code = h.get('error_code') || q.get('error_code') || '';
+      clean();
+      setTimeout(() => toast(/expired/.test(code) ? 'That sign-in link expired or was already used. Send a new one.' : 'That sign-in link didn\'t work. Send a new one.', 6000), 300);
+    }
+  } catch { setTimeout(() => toast('That sign-in link didn\'t work. Send a new one.', 6000), 300); }
+}
 export async function sendCode(email) {
-  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: location.origin + location.pathname } });
   if (error) throw new Error(error.message);
 }
 export async function verifyCode(email, token) {

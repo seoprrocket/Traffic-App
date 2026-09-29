@@ -72,10 +72,11 @@ export function renderAccount() {
       <div class="card sec"><h2>Delete account</h2><p class="note" style="margin:0">Permanently deletes your account and everything stored on the server: tickets, routes, drive history and reports. This can't be undone. Export a backup first if you want to keep a copy.</p>
         <div class="btns"><button class="btn danger" id="ac-del">Delete my account</button></div></div>`
     : `<form id="ac-form" class="card sec"><h2>Sign in or create an account</h2>
-        <p class="note" style="margin:0">We'll email you a 6-digit code. No password needed. Anything already on this phone uploads to your account.</p>
+        <p class="note" style="margin:0">${codeFor ? `Check <b>${esc(codeFor)}</b>. Tap the link in the email on this phone, or type the code if the email shows one. It can take a minute; check spam too.` : 'We\'ll email you a sign-in link. No password needed. Anything already on this phone uploads to your account.'}</p>
+        ${codeFor && /iphone|ipad/i.test(navigator.userAgent) && navigator.standalone ? '<p class="note small" style="margin:0">On iPhone, the link opens in Safari, not this Home Screen app. If it does, type the code here instead, or sign in once in Safari and again here.</p>' : ''}
         <label class="f">Email<input type="email" id="ac-email" required autocomplete="email" value="${esc(codeFor || '')}"></label>
-        ${codeFor ? '<label class="f">Code from the email<input type="text" id="ac-code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required></label>' : ''}
-        <button class="btn primary" type="submit" id="ac-go">${codeFor ? 'Sign in' : 'Email me a code'}</button>
+        ${codeFor ? '<label class="f">Code from the email (if it shows one)<input type="text" id="ac-code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required></label>' : ''}
+        <button class="btn primary" type="submit" id="ac-go">${codeFor ? 'Sign in with code' : 'Email me a sign-in link'}</button>
         ${codeFor ? '<button class="btn" type="button" id="ac-restart">Use a different email</button>' : ''}
         <p class="note" style="margin:0">By continuing you agree to the <a href="#terms">Terms</a> and <a href="#privacy">Privacy Policy</a>.</p></form>`)}
     <div class="btns"><a class="btn" href="#privacy">Privacy Policy</a><a class="btn" href="#terms">Terms of Use</a></div>`;
@@ -91,7 +92,7 @@ export function renderAccount() {
     e.preventDefault(); const b = host.querySelector('#ac-go'); busy(b, true);
     const email = host.querySelector('#ac-email').value.trim();
     try {
-      if (!codeFor) { await sendCode(email); codeFor = email; renderAccount(); toast('Code sent. Check your email.'); }
+      if (!codeFor) { await sendCode(email); codeFor = email; renderAccount(); toast('Sent. Check your email.'); }
       else { await verifyCode(email, host.querySelector('#ac-code').value.trim()); codeFor = null; if (!S.db.acceptedTerms) S.db.acceptedTerms = Date.now(); persist(); toast('Signed in. Syncing your data…'); go('more'); }
     } catch (err) { toast(err.message); busy(b, false); }
   });

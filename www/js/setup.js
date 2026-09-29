@@ -208,6 +208,7 @@ function steps() {
     out.push({ title: 'Set up sign-in emails', sub: 'People sign in with a 6-digit emailed code', state, html: `
       <ol class="small">
         <li>Open Authentication → Emails → Templates. Replace the body of <b>both</b> the <b>Confirm signup</b> and <b>Magic Link</b> templates with the text below. First-time sign-ins use Confirm signup; returning ones use Magic Link. The subject can be "Your Invictus Traffic Radar code".</li>
+        <li><b>Supabase's free plan only lets you edit templates after you set up custom SMTP</b> (below). Until then, the emails carry a sign-in link instead of a code. That works too: set <b>Site URL</b> to your Netlify address (Authentication → URL Configuration) so the link opens the app.</li>
         <li>Open Authentication → URL Configuration and set <b>Site URL</b> to <span class="mono sel">${esc(location.origin)}</span></li>
         <li><b>Before other people sign in:</b> Supabase's built-in sender only emails your own team and only a few per hour. Add custom SMTP under Authentication → Emails → SMTP Settings. Resend works well and has a free tier.</li>
       </ol>
