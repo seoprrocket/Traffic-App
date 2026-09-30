@@ -1,0 +1,21 @@
+# Checks the AI agents: recent errors and a live test of the ticket scanner's AI request.
+# Actions → "Diagnose AI agents" → Run workflow. Results show as notes on the run page.
+name: Diagnose AI agents
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['scripts/diagnose.mjs', '.github/workflows/diagnose.yml']
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node scripts/diagnose.mjs
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
