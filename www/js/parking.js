@@ -6,9 +6,9 @@ import { E } from './engine.js';
 import { locateOnce, notify, beep, speak } from './native.js';
 import { pageHead, bindBack, busy, startPick, geoFail, go } from './ui.js';
 import { pushReminder, unpushReminder } from './netlify.js';
+import { overpass } from './overpass.js';
 import { parkingRisk, dcBlocks, dcCovers, spokenRisk, hourName, LEVEL, RADIUS } from './parkrisk.js';
 
-const OVERPASS = 'https://overpass-api.de/api/interpreter';
 const layer = L.layerGroup().addTo(map);
 const carIcon = pin('#1d6cf0', '🚗');
 const lotIcon = pin('#2b6b3f', '🅿️');
@@ -36,10 +36,25 @@ export function parseParking(js, near) {
 }
 async function search(near, label) {
   const q = `[out:json][timeout:20];nwr(around:900,${near.lat},${near.lng})[amenity=parking];out center tags 60;`;
-  const r = await fetch(OVERPASS, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
-  if (!r.ok) throw new Error('Parking search is busy. Try again in a minute.');
-  results = parseParking(await r.json(), near); searchAt = near; searchLabel = label;
+  let js;
+  try { js = await overpass(q); }
+  catch {
+    // All map servers busy: fall back to the OpenStreetMap place search, which also lists parking
+    js = await nominatimParking(near).catch(() => null);
+    if (!js) throw new Error('Parking search servers are busy right now. Try again in a minute.');
+  }
+  results = parseParking(js, near); searchAt = near; searchLabel = label;
   drawLayer();
+}
+/** Backup: garages and lots from the OpenStreetMap place search, shaped like Overpass results. */
+async function nominatimParking(near) {
+  const d = 0.009;
+  const u = 'https://nominatim.openstreetmap.org/search?' + new URLSearchParams({ format: 'jsonv2', q: 'parking', limit: 40, bounded: 1, extratags: 1,
+    viewbox: `${near.lng - d * 1.3},${near.lat + d},${near.lng + d * 1.3},${near.lat - d}` });
+  const r = await fetch(u); if (!r.ok) throw new Error('HTTP ' + r.status);
+  const list = await r.json();
+  return { elements: list.filter((x) => x.category === 'amenity' && x.type === 'parking' || /parking/i.test(x.type)).map((x) => ({
+    type: x.osm_type, id: x.osm_id, lat: +x.lat, lon: +x.lon, tags: { amenity: 'parking', name: x.name || undefined, ...(x.extratags || {}) } })) };
 }
 function drawLayer() {
   layer.clearLayers();
@@ -162,12 +177,16 @@ export function renderParking() {
   }
   $$('[data-near]', host).forEach((b) => (b.onclick = async () => {
     let at, label;
+    const res = $('#pk-res');
+    busy(b, true, b.dataset.near === 'me' && !E.me ? 'Finding you…' : 'Searching…');
     if (b.dataset.near === 'dest') { at = near; label = (near.label || 'your destination').split(',')[0]; }
     else if (b.dataset.near === 'map') { const c = map.getCenter(); at = { lat: c.lat, lng: c.lng }; label = 'the map center'; }
-    else { try { at = E.me || (await locateOnce()); label = 'you'; } catch (e) { geoFail(e); return; } }
-    busy(b, true, 'Searching…');
-    try { await search(at, label); } catch (e) { toast(e.message); }
-    busy(b, false); $('#pk-res').innerHTML = resultsHtml(); bindResults();
+    else { try { at = E.me || (await locateOnce()); label = 'you'; } catch (e) { busy(b, false); geoFail(e); return; } }
+    b.textContent = 'Searching…';
+    res.innerHTML = '<div class="empty"><div class="spinner"></div> Looking for garages and lots…</div>';
+    try { await search(at, label); res.innerHTML = resultsHtml(); bindResults(); res.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    catch (e) { res.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+    busy(b, false);
   }));
   bindResults();
 }

@@ -2,7 +2,7 @@
 // and speed-limit drops ahead. One query covers the ~900 m around you and is refreshed as you move.
 import { dist, bearing, angleDiff } from './util.js';
 
-const OVERPASS = 'https://overpass-api.de/api/interpreter';
+import { overpass } from './overpass.js';
 const RADIUS = 900;
 export const road = { limit: null, name: null, way: null };
 let cache = { at: null, t: 0, nodes: [], ways: [] };
@@ -44,11 +44,7 @@ export async function refresh(p) {
     way(around:${RADIUS},${p.lat},${p.lng})[highway~"^(motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street)$"];
   );out geom;`;
   try {
-    const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 25000);
-    const r = await fetch(OVERPASS, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: ctl.signal });
-    clearTimeout(timer);
-    if (!r.ok) throw new Error('overpass ' + r.status);
-    cache = { at: { lat: p.lat, lng: p.lng }, t: Date.now(), ...parseOverpass(await r.json()) };
+    cache = { at: { lat: p.lat, lng: p.lng }, t: Date.now(), ...parseOverpass(await overpass(q, { timeoutMs: 20000 })) };
   } catch { failedAt = Date.now(); }
   finally { busy = false; }
 }
