@@ -7,7 +7,7 @@ const note = (title, msg, level = 'notice') => console.log(`::${level} title=${t
 try {
   const start = new Date(Date.now() - 24 * 3600e3).toISOString();
   const sql = "select timestamp, event_message from function_logs where regexp_contains(event_message, '(?i)error|claude|fail|exception|uncaught') order by timestamp desc limit 25";
-  const u = `https://api.supabase.com/v1/projects/${REF}/analytics/endpoints/logs.all?` + new URLSearchParams({ sql, iso_timestamp_start: start, iso_timestamp_end: new Date().toISOString() });
+  const u = `https://api.supabase.com/v1/projects/${REF}/analytics/endpoints/logs?` + new URLSearchParams({ sql, iso_timestamp_start: start, iso_timestamp_end: new Date().toISOString() });
   const r = await fetch(u, { headers: { Authorization: `Bearer ${TOKEN}` } });
   const j = await r.json().catch(() => ({}));
   const rows = (j.result || []).map((x) => `${new Date(x.timestamp / 1000).toISOString()}  ${String(x.event_message).replace(/sk-ant-[\w-]+/g, 'sk-ant-***').slice(0, 400)}`);
@@ -18,7 +18,7 @@ try {
 try {
   const start = new Date(Date.now() - 24 * 3600e3).toISOString();
   const sql = "select timestamp, m.function_id, r.status_code, r.execution_time_ms from function_edge_logs cross join unnest(metadata) as m cross join unnest(m.response) as r order by timestamp desc limit 15";
-  const u = `https://api.supabase.com/v1/projects/${REF}/analytics/endpoints/logs.all?` + new URLSearchParams({ sql, iso_timestamp_start: start, iso_timestamp_end: new Date().toISOString() });
+  const u = `https://api.supabase.com/v1/projects/${REF}/analytics/endpoints/logs?` + new URLSearchParams({ sql, iso_timestamp_start: start, iso_timestamp_end: new Date().toISOString() });
   const r = await fetch(u, { headers: { Authorization: `Bearer ${TOKEN}` } });
   const j = await r.json().catch(() => ({}));
   note('Function calls (last 24h)', r.ok ? ((j.result || []).map((x) => `${new Date(x.timestamp / 1000).toISOString()} ${x.function_id} → ${x.status_code} (${x.execution_time_ms} ms)`).join('\n') || 'none') : `HTTP ${r.status} ${JSON.stringify(j).slice(0, 300)}`);

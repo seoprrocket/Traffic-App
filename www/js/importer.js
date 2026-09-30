@@ -183,12 +183,24 @@ async function fromText(text, source = 'Pasted text') {
   await addFound(found, source);
   return found.length;
 }
+async function readOnPhone(pic) {
+  const text = await ocr(pic.canvas, (p) => { working = `Reading text on this phone… ${p}%`; paintWorking(); });
+  working = '';
+  const n = await fromText(text, 'Picture (read on this phone)');
+  if (!n) toast('Couldn\'t read ticket details from that picture. Screenshots of the ticket website work best, or paste the text.', 6000);
+}
 async function fromFile(file) {
   working = `Reading ${esc(file.name || 'picture')}…`; paint();
   try {
     const pic = await shrinkImage(file);
     if (aiReady()) {
-      const out = await agent('scan-ticket', { data: pic.data, mediaType: pic.mediaType });
+      let out;
+      try { out = await agent('scan-ticket', { data: pic.data, mediaType: pic.mediaType }); }
+      catch (e) {
+        // The AI scanner is down or misconfigured: read the picture on the phone instead of stopping
+        if (pic.canvas) { working = 'The AI scanner isn\'t responding. Reading it on this phone instead…'; paintWorking(); await readOnPhone(pic); return; }
+        throw new Error('The AI scanner isn\'t responding, and PDFs can\'t be read on the phone. Take a screenshot of the PDF and add that instead.');
+      }
       if (!out.ok) { toast(out.message); return; }
       const list = (out.tickets || [out.ticket]).map((tk, i) => ({
         street: tk.street || '', type: tk.type || 'Other', violation: tk.violation || '', date: tk.date || '', time: tk.time || '', speed: tk.speed ?? null, limit: tk.limit ?? null,
@@ -197,12 +209,9 @@ async function fromFile(file) {
       }));
       await addFound(list, 'AI scan');
     } else if (pic.canvas) {
-      const text = await ocr(pic.canvas, (p) => { working = `Reading text on this phone… ${p}%`; paintWorking(); });
-      working = '';
-      const n = await fromText(text, 'Screenshot (read on this phone)');
-      if (!n) toast('Couldn\'t read ticket details from that picture. Screenshots of the ticket website work best, or paste the text.');
-    } else toast('PDFs need the AI scanner (sign in with Supabase set up). Or open the PDF, copy the text and paste it here.');
-  } catch (e) { toast(e.message || 'Couldn\'t read that file'); }
+      await readOnPhone(pic);
+    } else toast('PDFs need the AI scanner (sign in with Supabase set up). Or take a screenshot of the PDF and add that.');
+  } catch (e) { toast(e.message || 'Couldn\'t read that file', 6000); }
   finally { working = ''; paint(); }
 }
 

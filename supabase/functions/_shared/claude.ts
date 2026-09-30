@@ -49,6 +49,9 @@ export async function askStructured<T>(opts: {
       await new Promise((r) => setTimeout(r, 2500));
       continue;
     }
+    // Account problems the owner can fix: say so plainly instead of "something went wrong"
+    if (/credit balance is too low/i.test(text)) throw new HttpError(503, "The AI scanner is paused: the Anthropic account behind this app is out of credit. The owner can add credit at console.anthropic.com → Billing. Screenshots can still be read on your phone.");
+    if (res.status === 401 || /invalid x-api-key|authentication_error/i.test(text)) throw new HttpError(503, "The AI features aren't connected: the Anthropic API key is missing or invalid.");
     throw new Error(`Claude API ${res.status}: ${text.slice(0, 500)}`);
   }
   throw new Error("Claude API unavailable");
