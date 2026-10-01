@@ -7,6 +7,7 @@ import { locateOnce } from './native.js';
 import { locWidget, geoFail, busy, confirmDel, go } from './ui.js';
 import { analyzeRoute, drawRoute, hotspots } from './pages-main.js';
 import { apiStatus, api, creds, pushTrip, unpushTrip, pushState } from './netlify.js';
+import { startNav, navOn } from './nav.js';
 
 const MIN = 60000;
 const clock = (t) => new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -64,7 +65,7 @@ export function renderDrive() {
           <label class="f">Extra time<select id="dv-buffer"><option value="0">None</option><option value="5" selected>5 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="30">30 min</option></select></label>
         </div>
         <label class="f">Name (optional)<input type="text" id="dv-name" maxlength="80" placeholder="Dentist, Work, Airport…"></label>
-        <button class="btn primary" id="dv-go">Check this drive</button>
+        <div class="btns"><button class="btn primary" id="dv-nav-now">🧭 Navigate</button><button class="btn" id="dv-go">Check traffic &amp; cameras first</button></div>
       </div>
       <div id="dv-out" class="sec"></div>
       <div class="sec" id="dv-trips"></div>
@@ -74,6 +75,12 @@ export function renderDrive() {
     if (E.me) setStartHere(E.me);
     else locateOnce().then(setStartHere).catch(() => {});
     $('#dv-go').onclick = checkDrive;
+    $('#dv-nav-now').onclick = async (e) => {
+      if (form.end.lat == null) { toast('Choose where you\'re going first'); $('#dv-end input')?.focus(); return; }
+      busy(e.currentTarget, true, 'Finding route…');
+      const ok = await startNav({ dest: { ...form.end }, name: ($('#dv-name').value.trim() || (form.end.label || 'Destination').split(',')[0]) });
+      busy(e.currentTarget, false);
+    };
   }
   renderTrips(); renderRisk();
 }
@@ -130,7 +137,8 @@ function showPlan(p) {
   out.innerHTML = `<div class="card sec plan">
       <p class="eyebrow">${esc(p.name)}</p>${head}<p class="small" style="margin:0">${traffic}</p>
       <div class="btns">
-        <a class="btn primary" id="dv-nav" href="${googleNav(p.end)}" target="_blank" rel="noopener">Start with Google Maps</a>
+        <button class="btn primary" id="dv-turn">🧭 Start navigation</button>
+        <a class="btn" id="dv-nav" href="${googleNav(p.end)}" target="_blank" rel="noopener">Google Maps instead</a>
         <button class="btn" id="dv-start-only">Start without directions</button>
       </div>
       <div class="btns">
@@ -143,6 +151,7 @@ function showPlan(p) {
   const begin = () => startTrip({ dest: p.end, name: p.name, arriveBy: p.arriveBy, factor: p.traffic && p.staticSecs ? p.nowSecs / p.staticSecs : 1 });
   $('#dv-nav').addEventListener('click', () => setTimeout(begin, 50));   // the link opens Google Maps; Invictus Traffic Radar keeps watching
   $('#dv-start-only').onclick = () => { begin(); go('map'); };
+  $('#dv-turn').onclick = (e) => { busy(e.currentTarget, true, 'Finding route…'); startNav({ dest: p.end, name: p.name, arriveBy: p.arriveBy, factor: p.traffic && p.staticSecs ? p.nowSecs / p.staticSecs : 1 }).finally(() => busy(e.currentTarget, false)); };
   $('#dv-map').onclick = () => { const poly = drawRoute(p.route, p.start, p.end); go('map'); setTimeout(() => map.fitBounds(poly.getBounds(), { padding: [40, 40] }), 80); };
   $('#dv-saveroute').onclick = () => bus.emit('save-route', { start: p.start, end: p.end }, p.route);
   $('#dv-save')?.addEventListener('click', () => saveTrip(p));
@@ -174,10 +183,10 @@ function renderTrips() {
       <div class="ttl">${esc(t.name)}${due ? '<span class="tag bad">Leave now</span>' : ''}</div>
       <div class="meta">Arrive by ${dayClock(t.arriveBy)}</div>
       <div class="meta">${past ? 'Done' : `Leave by <b>${clock(t.leaveAt)}</b> (${until(t.leaveAt)}) · about ${mins(t.secs)} min${t.traffic ? ' with traffic' : ''} · checked ${Math.max(0, Math.round((Date.now() - t.checkedAt) / MIN))} min ago`}</div></div>
-      <div class="acts">${past ? '' : `<a class="sbtn linkbtn" data-nav="${t.id}" href="${googleNav(t.end)}" target="_blank" rel="noopener">Go</a><button class="sbtn" data-chk="${t.id}">Check again</button><button class="sbtn" data-cal="${t.id}">Calendar</button>`}<button class="sbtn danger" data-del="${t.id}">Delete</button></div></div>`;
+      <div class="acts">${past ? '' : `<button class="sbtn" data-turn="${t.id}">Go</button><button class="sbtn" data-chk="${t.id}">Check again</button><button class="sbtn" data-cal="${t.id}">Calendar</button>`}<button class="sbtn danger" data-del="${t.id}">Delete</button></div></div>`;
   }).join('')}`;
   const find = (id) => S.db.plans.find((x) => x.id === id);
-  $$('[data-nav]', host).forEach((a) => a.addEventListener('click', () => { const t = find(a.dataset.nav); setTimeout(() => startTrip({ dest: t.end, name: t.name, arriveBy: t.arriveBy }), 50); }));
+  $$('[data-turn]', host).forEach((b) => (b.onclick = () => { const t = find(b.dataset.turn); startNav({ dest: t.end, name: t.name, arriveBy: t.arriveBy }); }));
   $$('[data-chk]', host).forEach((b) => (b.onclick = async () => { busy(b, true, 'Checking…'); await refreshTrip(find(b.dataset.chk), true); busy(b, false); renderTrips(); }));
   $$('[data-cal]', host).forEach((b) => (b.onclick = () => { const t = find(b.dataset.cal); calendar({ ...t, nowSecs: t.secs }); }));
   $$('[data-del]', host).forEach((b) => (b.onclick = () => confirmDel(b, () => { unpushTrip(b.dataset.del); S.db.plans = S.db.plans.filter((x) => x.id !== b.dataset.del); save(); renderTrips(); })));
@@ -251,6 +260,7 @@ export function endTrip({ arrived = false } = {}) {
   if (t.share) api('share', { action: 'end', token: t.share.token, secret: t.share.secret, arrived }).catch(() => {});
   S.db.activeTrip = null; persist();
   paintEta();
+  bus.emit('trip-ended');
 }
 
 let etaBusy = false;
@@ -334,6 +344,7 @@ function etaMenu() {
     <p style="margin:0">${etaText(t)}</p>
     <div class="choice">
       <button data-m="share"><span class="ic" style="background:var(--you)">📍</span><span><b>${t.share ? 'Sharing your drive' : 'Share drive'}</b><small>${t.share ? 'Send the link again, or stop sharing' : 'Send a live link with your location and arrival time'}</small></span></button>
+      ${navOn() ? '' : '<button data-m="turn"><span class="ic" style="background:var(--you)">🧭</span><span><b>Turn-by-turn directions</b><small>Navigate here inside the app, with camera warnings</small></span></button>'}
       <a class="choicelink" href="${googleNav(t.dest)}" target="_blank" rel="noopener"><span class="ic" style="background:var(--ok)">🧭</span><span><b>Directions in Google Maps</b><small>Invictus Traffic Radar keeps watching while it's open</small></span></a>
       <button data-m="park"><span class="ic" style="background:var(--surface2)">🅿️</span><span><b>Parking near ${esc(t.name)}</b><small>Garages and lots close to where you're going</small></span></button>
       <button data-m="end"><span class="ic" style="background:var(--danger)">✕</span><span><b>End trip</b><small>Stops the ETA and any sharing</small></span></button>
@@ -342,6 +353,7 @@ function etaMenu() {
       closeSheet();
       if (x.dataset.m === 'share') shareDrive();
       if (x.dataset.m === 'park') { S.parkNear = t.dest; go('parking'); }
+      if (x.dataset.m === 'turn') startNav({ dest: t.dest, name: t.name, arriveBy: t.arriveBy, factor: t.factor });
       if (x.dataset.m === 'end') { endTrip(); toast('Trip ended'); }
     }));
   }));

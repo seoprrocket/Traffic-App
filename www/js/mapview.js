@@ -1,6 +1,7 @@
 // The home map: markers for tickets, cameras, community reports, and you.
 import { S, sens, activeReports } from './store.js';
 import { esc, money, ago, DC, headingName, bus } from './util.js';
+import { carSvg } from './cars.js';
 
 export const TILE = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 export const ATTR = '© OpenStreetMap';
@@ -11,7 +12,12 @@ import { rcat } from './reports.js';
 export const pin = (color, emoji) => L.divIcon({ className: '', html: `<div class="m-pin" style="background:${color}"><span>${emoji}</span></div>`, iconSize: [34, 34], iconAnchor: [17, 34], popupAnchor: [0, -30] });
 export const icons = { parkTicket: pin('#7a3fd1', '🅿️'), ticket: pin('#d42a2a', '⚠️'), camera: pin('#d99100', '📷'), temp: pin('#1d6cf0', '📍') };
 export const reportIcon = (r) => { const c = rcat(r.type); return pin(c.c, c.e); };
-export const youIcon = () => L.divIcon({ className: '', html: '<div class="m-you"><i></i></div>', iconSize: [22, 22], iconAnchor: [11, 11] });
+const carStyle = () => S.db.settings.carStyle || 'dot';
+export const youIcon = () => {
+  const st = carStyle();
+  if (st === 'dot') return L.divIcon({ className: '', html: '<div class="m-you"><i></i></div>', iconSize: [22, 22], iconAnchor: [11, 11] });
+  return L.divIcon({ className: '', html: `<div class="m-car">${carSvg(st, S.db.settings.carColor || '#f4f5f7', 46)}</div>`, iconSize: [46, 46], iconAnchor: [23, 23] });
+};
 
 export const map = L.map('map', { zoomControl: false, preferCanvas: true }).setView(DC, 13);
 L.tileLayer(TILE, { maxZoom: 19, attribution: ATTR }).addTo(map);
@@ -54,13 +60,20 @@ export function drawMarkers() {
   activeReports().forEach((r) => L.marker([r.lat, r.lng], { icon: reportIcon(r) }).bindPopup(reportPopup(r)).addTo(layers.reports));
 }
 
-let meMarker = null;
+let meMarker = null, lastMe = null, lastHeading = null;
 export function placeMe(p) {
+  lastMe = p;
+  if (p.heading != null && !Number.isNaN(p.heading)) lastHeading = p.heading;
   if (!meMarker) meMarker = L.marker([p.lat, p.lng], { icon: youIcon(), zIndexOffset: 1000, interactive: false }).addTo(map);
   else meMarker.setLatLng([p.lat, p.lng]);
-  const el = meMarker.getElement()?.querySelector('.m-you i');
-  if (el) { el.style.display = p.heading == null ? 'none' : 'block'; if (p.heading != null) el.style.transform = `rotate(${p.heading}deg)`; }
+  const root = meMarker.getElement();
+  const el = root?.querySelector('.m-you i');
+  if (el) { el.style.display = lastHeading == null ? 'none' : 'block'; if (lastHeading != null) el.style.transform = `rotate(${lastHeading}deg)`; }
+  const car = root?.querySelector('.m-car');
+  if (car) car.style.transform = `rotate(${lastHeading ?? 0}deg)`;     // the car keeps pointing the way you last moved
 }
+/** After the car style changes in Settings. */
+export function refreshMe() { if (meMarker) { meMarker.setIcon(youIcon()); if (lastMe) placeMe(lastMe); } }
 
 export function fitAll(me) {
   const pts = [...S.db.tickets, ...S.db.cameras, ...activeReports()].map((p) => [p.lat, p.lng]);

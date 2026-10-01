@@ -7,6 +7,8 @@ import { unlockAudio } from './native.js';
 import { cloudConfigured, usingOverride, sendCode, verifyCode, signOut, syncNow, saveProfile, deleteAccount, loadOfficialCameras } from './cloud.js';
 import { summary } from './pages-main.js';
 import { pushState, enablePush, disablePush, testPush, pushTrip } from './netlify.js';
+import { CAR_STYLES, CAR_COLORS, carSvg } from './cars.js';
+import { refreshMe } from './mapview.js';
 
 const cfg = window.TR_CONFIG || {};
 const COMPANY = cfg.company || 'The Invictus Traffic Radar team';
@@ -176,6 +178,9 @@ export function openSettings() {
       <label class="f">Camera warning (minutes ahead)<input type="number" id="s-lead" min="1" max="15" value="${st.lead}"></label>
       <label class="f">Ticket-zone radius (meters)<input type="number" id="s-rad" min="50" max="1000" step="50" value="${st.ticketRadius}"></label>
     </div>
+    <h3 class="sech">Your car on the map</h3>
+    <div class="carpick" id="s-car">${CAR_STYLES.map(([k, l]) => `<label class="cartile"><input type="radio" name="carstyle" value="${k}" ${(st.carStyle || 'dot') === k ? 'checked' : ''}><span class="carprev" data-style="${k}">${k === 'dot' ? '<span class="m-you" style="display:block;margin:auto"></span>' : carSvg(k, st.carColor || '#f4f5f7', 56)}</span><b>${l}</b></label>`).join('')}</div>
+    <div class="swatches" id="s-carcolor" ${(st.carStyle || 'dot') === 'dot' ? 'hidden' : ''}>${CAR_COLORS.map(([c, n]) => `<button type="button" class="swatch${(st.carColor || '#f4f5f7') === c ? ' on' : ''}" data-c="${c}" style="background:${c}" aria-label="${n}" title="${n}"></button>`).join('')}</div>
     <h3 class="sech">Speed alerts</h3>
     <div class="grid2">
       <label class="f">Warn me when I'm over the limit by<select id="s-over">${[['', 'Off'], ['0', 'Any amount'], ['5', '5 mph'], ['10', '10 mph'], ['15', '15 mph']].map(([v, l]) => `<option value="${v}"${String(st.speedOverBy ?? '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -212,6 +217,11 @@ export function openSettings() {
       roadBumps: s.querySelector('#s-rb').checked, roadCurves: s.querySelector('#s-rc').checked,
       roadLimits: s.querySelector('#s-rl').checked, roadTolls: s.querySelector('#s-rt').checked,
     });
+    const carRepaint = () => { $$('.carprev', s).forEach((el) => { const k = el.dataset.style; if (k !== 'dot') el.innerHTML = carSvg(k, S.db.settings.carColor || '#f4f5f7', 56); });
+      $$('.swatch', s).forEach((b) => b.classList.toggle('on', b.dataset.c === (S.db.settings.carColor || '#f4f5f7')));
+      s.querySelector('#s-carcolor').hidden = (S.db.settings.carStyle || 'dot') === 'dot'; refreshMe(); save(); };
+    $$('input[name="carstyle"]', s).forEach((r) => (r.onchange = () => { S.db.settings.carStyle = r.value; carRepaint(); }));
+    $$('.swatch', s).forEach((b) => (b.onclick = () => { S.db.settings.carColor = b.dataset.c; carRepaint(); }));
     s.querySelector('#s-save').onclick = () => { read(); save(); saveProfile(); closeSheet(); toast('Settings saved'); };
     s.querySelector('#s-test').onclick = () => { read(); persist(); unlockAudio(); closeSheet(); playSamples(); toast('Playing 11 sample alerts. This takes about a minute.', 4000); };
     s.querySelector('#s-clr').onclick = () => { S.db.tickets = S.db.tickets.filter((t) => !t.example); save(); closeSheet(); toast('Examples removed'); };

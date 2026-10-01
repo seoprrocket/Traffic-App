@@ -10,6 +10,7 @@ import { renderList, renderStats, renderMore } from './pages-main.js';
 import { renderDrive, tripTick, paintEta } from './trip.js';
 import { renderParking } from './parking.js';
 import { renderImport } from './importer.js';
+import { navOn } from './nav.js';
 import { renderCommunityMap, renderFeed, renderContrib, renderHeat } from './pages-community.js';
 import { renderRoutes, renderCommutes, commuteCheck } from './pages-plan.js';
 import { renderCoach, renderTips, renderDispute } from './pages-learn.js';
@@ -113,6 +114,7 @@ bus.on('change', rerender);
 bus.on('community', () => { drawMarkers(); if (['community-map', 'reporting-feed', 'my-contributions', 'risk-heatmap'].includes(S.view)) render(S.view); });
 bus.on('agents', () => { if (['driving-coach', 'commute-schedules', 'dispute'].includes(S.view)) render(S.view); });
 bus.on('drive', () => paintEta());
+bus.on('nav-start', () => showHandsFree(false));
 bus.on('log', debounce(() => { if (S.view === 'alert-log') renderLog(); }, 300));
 bus.on('auth', () => { loadOfficialCameras(true); rerender(); });
 bus.on('outbox', debounce(() => flush(), 1500));
@@ -121,12 +123,12 @@ bus.on('camera-moved', (id, lat, lng) => { const c = S.db.cameras.find((x) => x.
 bus.on('drive', (on) => {
   $('#driveBtn').classList.toggle('on', on); $('#driveBtn').setAttribute('aria-pressed', on); $('#driveLbl').textContent = on ? 'Driving' : 'Start drive';
   $('#speedo').hidden = !on; $('#micBtn').hidden = !on;
-  if (on) { follow = true; show('map'); if (S.db.settings.handsFreeAuto) showHandsFree(true); }
+  if (on) { follow = true; show('map'); if (S.db.settings.handsFreeAuto && !navOn()) showHandsFree(true); }
   else showHandsFree(false);
 });
 bus.on('fix', (p) => {
   placeMe(p);
-  if (follow && S.view === 'map') map.setView([p.lat, p.lng], Math.max(map.getZoom(), 15), { animate: true });
+  if (follow && S.view === 'map' && !navOn()) map.setView([p.lat, p.lng], Math.max(map.getZoom(), 15), { animate: true });
   const mph = Math.round(p.speed * 2.23694);
   $('#spdVal').textContent = mph;
   $('#limSign').hidden = !E.limitHere; $('#limVal').textContent = E.limitHere || '';

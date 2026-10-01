@@ -10,6 +10,7 @@ import { rcat } from './mapview.js';
 import { HAZARDS, sayType } from './reports.js';
 import { checkParkingAt } from './parking.js';
 import { spokenRisk } from './parkrisk.js';
+import { startNav, endNav } from './nav.js';
 
 // ---------------------------------------------------------------- understanding simple commands on the phone
 const REPORT_WORDS = [
@@ -29,6 +30,9 @@ const REPORT_WORDS = [
 function understand(raw) {
   const t = raw.toLowerCase().trim();
   if (/^(undo|cancel|never ?mind)/.test(t)) return { action: 'undo' };
+  if (/\b(stop|end|cancel) (navigation|navigating|directions|the route)\b/.test(t)) return { action: 'end_nav' };
+  const go2 = /\b(?:navigate|take me|drive me|directions|get me|go|head)\s+(?:to|toward|towards)\s+(.{3,80})$/.exec(t);
+  if (go2) return { action: 'navigate', place: go2[1].replace(/[.?!]+$/, '') };
   if (/(start|begin) (driving|drive|drive mode)|drive mode on/.test(t)) return { action: 'start_drive' };
   if (/(stop|end) (driving|drive|drive mode)|drive mode off/.test(t)) return { action: 'stop_drive' };
   if (/speed limit|how fast can i|what'?s the limit/.test(t)) return { speech: limitSummary() };
@@ -84,6 +88,19 @@ export async function voiceCommand() {
     if (r.action === 'report') { await doReport(r.report_type || 'Other', r.report_note); return; }
     if (r.action === 'share_drive') { bus.emit('share-drive'); return; }
     if (r.action === 'find_parking') { bus.emit('go', 'parking'); return; }
+    if (r.action === 'end_nav') { endNav(); speak('Navigation ended.'); return; }
+    if (r.action === 'navigate') {
+      speak(`Finding ${r.place}.`);
+      const near = E.me || {};
+      const q = new URLSearchParams({ format: 'json', limit: '1', countrycodes: 'us', q: r.place, viewbox: '-79.50,39.75,-75.00,37.85', bounded: '1' });
+      if (near.lat) q.set('viewbox', `${near.lng - 0.6},${near.lat + 0.45},${near.lng + 0.6},${near.lat - 0.45}`);
+      let hit = null;
+      try { hit = (await (await fetch('https://nominatim.openstreetmap.org/search?' + q)).json())[0]; } catch { /* offline */ }
+      if (!hit) { speak(`I couldn't find ${r.place}. Try the Drive tab.`); return; }
+      const label = hit.display_name;
+      await startNav({ dest: { lat: +hit.lat, lng: +hit.lon, label }, name: label.split(',')[0] });
+      return;
+    }
     if (r.action === 'park_check') {
       if (!E.me) { speak('I need your location first. Start drive mode or tap locate.'); return; }
       speak('Checking parking tickets here.');

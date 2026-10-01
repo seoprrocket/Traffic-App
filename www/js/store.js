@@ -7,7 +7,7 @@ const KEY = 'ticketRadar.v1';
 export const DEFAULT_SETTINGS = {
   lead: 5, ticketRadius: 300, alertType: 'voice', share: false, ai: true, sensitivity: 'medium',
   officialCams: true, speedLimits: true, handsFreeAuto: true,
-  parkLayer: false, speedOverBy: 5, speedMax: 0, roadBumps: true, roadCurves: true, roadLimits: true, roadTolls: true,
+  carStyle: 'dot', carColor: '#f4f5f7', navMuted: false, parkLayer: false, speedOverBy: 5, speedMax: 0, roadBumps: true, roadCurves: true, roadLimits: true, roadTolls: true,
 };
 export const DEFAULT_PROFILE = { name: '', homeLabel: '', workLabel: '', avoidRisk: 'warn', emailCoach: true };
 const LISTS = ['tickets', 'cameras', 'reports', 'routes', 'commutes', 'events', 'alerts', 'trips', 'outbox', 'official', 'community', 'hotspots', 'coach', 'predictions', 'disputes', 'plans'];

@@ -286,3 +286,36 @@ body.hf .alert{top:auto;bottom:calc(128px + env(safe-area-inset-bottom,0px))}
 .hrs{display:flex;align-items:flex-end;gap:2px;height:48px;margin-top:8px}
 .hrs span{flex:1;min-height:2px;background:var(--warn);border-radius:2px 2px 0 0}
 .hrsx{display:flex;justify-content:space-between;color:var(--muted)}
+
+/* Car on the map */
+.m-car{width:46px;height:46px;display:grid;place-items:center;transition:transform .5s ease;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
+.carpick{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.cartile{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;border:1px solid var(--line);border-radius:12px;background:var(--surface2);cursor:pointer;text-align:center;font-size:12px;min-width:0}
+.cartile input{position:absolute;opacity:0;pointer-events:none}
+.cartile:has(input:checked){border-color:var(--you);box-shadow:0 0 0 2px var(--you) inset}
+.carprev{height:58px;display:grid;place-items:center}
+.swatches{display:flex;flex-wrap:wrap;gap:8px}
+.swatch{width:32px;height:32px;border-radius:50%;border:2px solid var(--line);box-shadow:inset 0 0 0 2px rgba(255,255,255,.25)}
+.swatch.on{outline:3px solid var(--you);outline-offset:2px}
+
+/* Turn-by-turn navigation */
+#navui{position:absolute;inset:0;pointer-events:none;z-index:700}
+#navui>*{pointer-events:auto}
+.navtop{position:absolute;left:10px;right:10px;top:10px;display:flex;gap:12px;align-items:center;background:#0f5132;color:#fff;border-radius:16px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.35);max-width:620px;margin:0 auto}
+.navarrow{flex:none;width:56px;height:56px;color:#fff}
+.navarrow svg{width:100%;height:100%}
+.navtxt{display:flex;flex-direction:column;min-width:0}
+.navdist{font:700 30px/1 var(--display);letter-spacing:.01em}
+.navins{font-size:17px;font-weight:600;line-height:1.25;overflow-wrap:anywhere}
+.navthen{position:absolute;left:10px;top:104px;display:flex;align-items:center;gap:6px;background:#0b3d26;color:#fff;border-radius:0 0 12px 12px;padding:4px 12px;font-weight:600;font-size:14px}
+.navthen svg{width:24px;height:24px}
+.navbot{position:absolute;left:10px;right:10px;bottom:12px;display:flex;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,.3);max-width:620px;margin:0 auto}
+.navstats{flex:1;min-width:0;display:flex;flex-direction:column}
+.navmin{font:700 24px/1 var(--display);color:var(--ok)}
+.navsub{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.navbtn{flex:none;min-width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);font-size:18px;color:var(--fg)}
+.navbtn.end{background:var(--danger);color:#fff;border-color:var(--danger);font-weight:700;padding:0 14px;font-size:16px}
+body.nav .etabar,body.nav .fab,body.nav .legend,body.nav #pickbar{display:none!important}
+body.nav .speedo{top:auto;bottom:86px}
+body.nav .maptools{top:118px}
+body.nav .alert{top:auto;bottom:calc(150px + env(safe-area-inset-bottom,0px))}
