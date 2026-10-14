@@ -74,6 +74,7 @@ export function renderAccount() {
       <div class="card sec"><h2>Delete account</h2><p class="note" style="margin:0">Permanently deletes your account and everything stored on the server: tickets, routes, drive history and reports. This can't be undone. Export a backup first if you want to keep a copy.</p>
         <div class="btns"><button class="btn danger" id="ac-del">Delete my account</button></div></div>`
     : `<form id="ac-form" class="card sec"><h2>Sign in or create an account</h2>
+        ${(() => { const n = S.db.tickets.filter((t) => !t.example).length; return n ? `<div class="privacy">📍 <b>${n} ticket location${n === 1 ? '' : 's'}</b> saved on this phone. They upload to your account when you sign in.</div>` : ''; })()}
         <p class="note" style="margin:0">${codeFor ? `Check <b>${esc(codeFor)}</b>. Tap the link in the email on this phone, or type the code if the email shows one. It can take a minute; check spam too.` : 'We\'ll email you a sign-in link. No password needed. Anything already on this phone uploads to your account.'}</p>
         ${codeFor && /iphone|ipad/i.test(navigator.userAgent) && navigator.standalone ? '<p class="note small" style="margin:0">On iPhone, the link opens in Safari, not this Home Screen app. If it does, type the code here instead, or sign in once in Safari and again here.</p>' : ''}
         <label class="f">Email<input type="email" id="ac-email" required autocomplete="email" value="${esc(codeFor || '')}"></label>

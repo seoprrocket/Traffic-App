@@ -52,13 +52,47 @@ export function renderList() {
       (mine.length ? mine.map((c) => `<div class="row c"><div class="main"><div class="ttl">${esc(c.name)}</div>
       <div class="meta">${esc(c.kind)} camera${c.limit ? ' · limit ' + c.limit + ' mph' : ''}${c.heading != null ? ' · catches ' + ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(c.heading / 45) % 8] + '-bound' : ''} · ${E.me ? fmtDist(dist(E.me, c)) + ' from you' : '<span class="mono">' + c.lat.toFixed(5) + ', ' + c.lng.toFixed(5) + '</span>'}</div></div>
       <div class="acts"><button class="sbtn" data-go="${c.id}">Map</button><button class="sbtn" data-ed="${c.id}">Edit</button><button class="sbtn danger" data-del="${c.id}">Delete</button></div></div>`).join('')
-        : '<div class="empty">No pins of your own yet. Tap the red + and choose "Camera location" for any camera the official list misses.</div>');
+        : '<div class="empty">No pins of your own yet. Tap the red + and choose "Camera location" for any camera the official list misses.</div>') +
+      officialList();
   }
   const list = listKind === 'tickets' ? 'tickets' : 'cameras', arr = S.db[list];
   $$('[data-go]', host).forEach((b) => (b.onclick = () => { const x = arr.find((y) => y.id === b.dataset.go); go('map'); map.setView([x.lat, x.lng], 17); }));
   $$('[data-ed]', host).forEach((b) => (b.onclick = () => { const x = arr.find((y) => y.id === b.dataset.ed); list === 'tickets' ? ticketForm(x) : cameraForm(x); }));
   $$('[data-disp]', host).forEach((b) => (b.onclick = () => { S.disputeTicket = b.dataset.disp; go('dispute'); }));
   $$('[data-del]', host).forEach((b) => (b.onclick = () => confirmDel(b, () => removeLocal(list, b.dataset.del))));
+  if (listKind !== 'tickets') bindOfficial(host);
+}
+
+// Every official camera, searchable, grouped by area (List → Cameras)
+const DIRN = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+const CAM_ICON = { Speed: '📷', 'Red light': '🚦', 'Stop sign': '🛑', Truck: '🚚', 'School zone': '🏫', 'Bus lane': '🚌' };
+let camQ = '', camShow = 40;
+function officialList() {
+  const all = S.db.official;
+  if (!all.length) return '';
+  const q = camQ.trim().toLowerCase();
+  const hit = q ? all.filter((c) => (c.name + ' ' + (c.jurisdiction || '') + ' ' + c.kind).toLowerCase().includes(q)) : all;
+  const sorted = E.me ? [...hit].sort((a, b) => dist(E.me, a) - dist(E.me, b)) : [...hit].sort((a, b) => String(a.jurisdiction).localeCompare(String(b.jurisdiction)) || a.name.localeCompare(b.name, undefined, { numeric: true }));
+  const shown = sorted.slice(0, camShow);
+  let lastJ = null;
+  const rows = shown.map((c) => {
+    const head = !E.me && c.jurisdiction !== lastJ ? `<div class="grouplbl">${esc(c.jurisdiction || 'Other')}</div>` : '';
+    lastJ = c.jurisdiction;
+    return `${head}<div class="row c"><span class="emo">${CAM_ICON[c.kind] || '📷'}</span><div class="main"><div class="ttl">${esc(c.name)}</div>
+      <div class="meta">${esc(c.kind)}${c.kind === 'School zone' ? '' : ' camera'}${c.limit ? ' · limit ' + c.limit + ' mph' : ''}${c.heading != null ? ' · catches ' + DIRN[Math.round(c.heading / 45) % 8] + '-bound' : ''}${E.me ? ' · ' + fmtDist(dist(E.me, c)) + ' from you · ' + esc(c.jurisdiction || '') : ''}${c.verified === false ? ' · <span class="bad">not yet verified</span>' : ''}</div></div>
+      <div class="acts"><button class="sbtn" data-ogo="${esc(c.id)}">Map</button></div></div>`;
+  }).join('');
+  return `<h3 class="sech" style="margin-top:18px">Official cameras</h3>
+    <input type="search" id="cam-q" value="${esc(camQ)}" placeholder="Search ${all.length} cameras by street or school" autocomplete="off" style="width:100%;box-sizing:border-box;margin-bottom:8px">
+    <p class="note" style="margin:0 0 6px">${hit.length === all.length ? `All ${all.length}` : `${hit.length} of ${all.length}`}${E.me ? ', closest first' : ', by area'}.</p>
+    ${rows || '<div class="empty">No camera matches that. Try a shorter street name.</div>'}
+    ${sorted.length > camShow ? `<div class="btns"><button class="btn" id="cam-more">Show ${Math.min(100, sorted.length - camShow)} more</button></div>` : ''}`;
+}
+function bindOfficial(host) {
+  const q = host.querySelector('#cam-q');
+  if (q) q.addEventListener('input', () => { camQ = q.value; camShow = 40; const pos = q.selectionStart; renderList(); const q2 = host.querySelector('#cam-q'); if (q2) { q2.focus(); try { q2.setSelectionRange(pos, pos); } catch { /* ok */ } } });
+  host.querySelector('#cam-more')?.addEventListener('click', () => { camShow += 100; renderList(); });
+  $$('[data-ogo]', host).forEach((b) => (b.onclick = () => { const x = S.db.official.find((y) => y.id === b.dataset.ogo); if (x) { go('map'); map.setView([x.lat, x.lng], 17); } }));
 }
 
 // ---------------------------------------------------------------- Stats

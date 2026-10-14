@@ -150,6 +150,11 @@ export async function syncNow() {
       if (error) throw error;
       const local = LOCAL[table];
       const server = data.map(fromRow[table]);
+      const onServer = new Set(server.map((x) => x.id));
+      // Never drop something saved on this phone that hasn't reached the account yet:
+      // keep it and queue it, instead of letting the server copy overwrite it.
+      const unsent = S.db[local].filter((x) => !onServer.has(x.id) && !pending.has(x.id) && !x.example && (x.created || 0) > (S.db.lastPull || 0));
+      unsent.forEach((x) => { pending.add(x.id); queue(table, 'upsert', { id: x.id }); });
       const keep = S.db[local].filter((x) => pending.has(x.id) || x.example);
       S.db[local] = server.filter((x) => !pending.has(x.id)).concat(keep);
     };
@@ -202,11 +207,16 @@ export async function loadOfficialCameras(force) {
           verified: c.verified, source: c.source, jurisdiction: c.jurisdiction, official: true })));
         if (data.length < 1000) break;
       }
+      // A camera with no real position (the county left it blank, stored as 0,0) can't warn anyone: leave it out
+      list = list.filter((c) => Number.isFinite(c.lat) && Number.isFinite(c.lng) && c.lat !== 0 && c.lng !== 0);
       if (!list.length) list = null;   // backend not seeded yet: load the public lists directly
-      else if (!list.some((c) => c.source === 'md_open_data')) {
-        // backend has DC only (Maryland update not run yet): add Maryland straight from the counties
-        const md = await Promise.allSettled([loadMoCo(), loadPG()]);
-        list.push(...md.flatMap((r) => (r.status === 'fulfilled' ? r.value : [])));
+      else {
+        // Each county the backend doesn't have yet comes straight from that county's open data
+        const has = (re) => list.some((c) => re.test(c.jurisdiction || ''));
+        const add = [];
+        if (!has(/montgomery/i)) add.push(loadMoCo());
+        if (!has(/prince george/i)) add.push(loadPG());
+        if (add.length) { const md = await Promise.allSettled(add); list.push(...md.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))); }
       }
     }
     if (!list) list = await loadAllPublic();

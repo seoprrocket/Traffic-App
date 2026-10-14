@@ -62,17 +62,20 @@ async function syncMoCo() {
   const q = encodeURIComponent;
   const r = await fetch(`${MOCO}?$select=${q("site_number,address,directions,latitude,longitude,quarter_name")}&$order=${q("quarter_name DESC")}&$limit=2000`);
   if (!r.ok) throw new Error(`Montgomery data ${r.status}`);
-  const all = (await r.json() as Row[]).filter((x) => x.latitude && x.longitude && x.quarter_name);
+  // Only sites with a real position: the county leaves coordinates blank (or "0") on many rows
+  const all = (await r.json() as Row[]).filter((x) => x.quarter_name);
   const latest = all.map((x) => String(x.quarter_name)).sort().pop();
   const seen = new Set<string>(); const rows: Row[] = [];
   for (const x of all) {
     const site = String(x.site_number);
     if (x.quarter_name !== latest || seen.has(site)) continue;
+    const lat = +String(x.latitude ?? ""), lng = +String(x.longitude ?? "");
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !lat || !lng) continue;
     seen.add(site);
     rows.push({
       ...base(runAt), source: "md_open_data", source_ref: `moco-${site}`, jurisdiction: "Montgomery County, MD",
       name: `${String(x.address ?? "Speed camera").trim()}${x.directions ? " " + x.directions : ""}`,
-      lat: +String(x.latitude), lng: +String(x.longitude), kind: "Speed", speed_limit: null,
+      lat, lng, kind: "Speed", speed_limit: null,
       heading: parseHeading(String(x.directions ?? "")),
     });
   }
@@ -101,6 +104,7 @@ async function syncPG() {
   const r = await fetch(`${PG}?where=1%3D1&outFields=${encodeURIComponent("ObjectId,id,locname,location,type,isActive")}&outSR=4326&f=geojson&resultRecordCount=2000`);
   if (!r.ok) throw new Error(`Prince George's data ${r.status}`);
   const js = await r.json();
+  if (js?.error) throw new Error(`Prince George's data: ${js.error.message ?? JSON.stringify(js.error).slice(0, 120)}`); // ArcGIS reports errors with HTTP 200
   const rows: Row[] = [];
   for (const f of js.features ?? []) {
     const p = f.properties ?? {}, g = f.geometry;

@@ -58,7 +58,10 @@ export function replaceDb(d) { S.db = normalize(d); save(); }
 // ---- Outbox: queued writes for the server --------------------------------
 // op: 'upsert' | 'insert' | 'update' | 'delete'
 export function queue(table, op, row) {
-  if (!S.user) return;
+  // Always remembered, even while signed out or if the sign-in quietly expired:
+  // the change waits in the outbox and uploads at the next sign-in (cloud.js flushes
+  // only when signed in). Before, a change made while not signed in was never queued
+  // and could be overwritten by the next sync.
   const id = row.id;
   // collapse repeated edits of the same row
   if (op === 'update' || op === 'upsert') {

@@ -24,7 +24,7 @@ export async function askStructured<T>(opts: {
 }): Promise<T> {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
   if (!key) throw new HttpError(503, "The AI features aren't set up yet (missing ANTHROPIC_API_KEY).");
-  const body = {
+  const body: Record<string, unknown> = {
     model: opts.model ?? SMART_MODEL,
     max_tokens: opts.maxTokens ?? 1500,
     system: opts.system,
@@ -32,7 +32,13 @@ export async function askStructured<T>(opts: {
     tools: [opts.tool],
     tool_choice: { type: "tool", name: opts.tool.name },
   };
-  for (let attempt = 0; attempt < 2; attempt++) {
+  // Some models refuse a forced tool choice ("tool_choice: type 'tool' and 'any' are not supported").
+  // Then ask the same way with tool_choice "auto" and insist on the tool in the instructions.
+  const relax = () => {
+    body.tool_choice = { type: "auto" };
+    body.system = `${opts.system}\n\nAlways answer by calling the ${opts.tool.name} tool exactly once. Never answer in plain text.`;
+  };
+  for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
@@ -41,10 +47,14 @@ export async function askStructured<T>(opts: {
     if (res.ok) {
       const out = await res.json();
       const block = (out.content ?? []).find((b: { type: string }) => b.type === "tool_use");
-      if (!block) throw new Error("Claude returned no structured answer");
+      if (!block) {
+        if ((body.tool_choice as { type: string }).type === "auto" && attempt < 2) continue;   // asked nicely, got prose: once more
+        throw new Error("Claude returned no structured answer");
+      }
       return block.input as T;
     }
     const text = await res.text();
+    if (res.status === 400 && /tool_choice/.test(text) && /not supported/.test(text) && (body.tool_choice as { type: string }).type !== "auto") { relax(); continue; }
     if ((res.status === 429 || res.status === 529 || res.status >= 500) && attempt === 0) {
       await new Promise((r) => setTimeout(r, 2500));
       continue;

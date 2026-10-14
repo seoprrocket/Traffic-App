@@ -344,10 +344,10 @@ document.addEventListener('click', async (e) => {
     if (!ki.ok) { toast(ki.danger ? "That key must not go in the app." : ki.msg); render(); return; }
     await checkAll();
   } else if (act === 'copy-db') {
-    try { const sql = [await sqlFile('20260929000000_init.sql'), await sqlFile('20260929000050_setup_status.sql'), await sqlFile('20260929000200_maryland.sql'), await sqlFile('20260929000300_hazards.sql')].join('\n\n'); copyText(sql); }
+    try { const sql = [await sqlFile('20260929000000_init.sql'), await sqlFile('20260929000050_setup_status.sql'), await sqlFile('20260929000200_maryland.sql'), await sqlFile('20260929000300_hazards.sql'), await sqlFile('20261014000000_retire_zero_coords.sql')].join('\n\n'); copyText(sql); }
     catch { toast("Couldn't load the SQL files. Upload the whole www folder, including www/setup."); }
   } else if (act === 'copy-md') {
-    try { copyText([await sqlFile('20260929000050_setup_status.sql'), await sqlFile('20260929000200_maryland.sql'), await sqlFile('20260929000300_hazards.sql')].join('\n\n')); } catch { toast("Couldn't load the SQL file. Upload the whole www folder."); }
+    try { copyText([await sqlFile('20260929000050_setup_status.sql'), await sqlFile('20260929000200_maryland.sql'), await sqlFile('20260929000300_hazards.sql'), await sqlFile('20261014000000_retire_zero_coords.sql')].join('\n\n')); } catch { toast("Couldn't load the SQL file. Upload the whole www folder."); }
   } else if (act === 'copy-sched') {
     try { copyText(await sqlFile('20260929000100_schedules.sql')); } catch { toast("Couldn't load the SQL file. Upload the whole www folder."); }
   } else if (act === 'dl-config') {
