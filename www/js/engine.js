@@ -1,5 +1,5 @@
 // Drive mode: follows your GPS and fires the warnings.
-import { S, sens, allCameras, activeReports, logAlert, logEvent, logTrip } from './store.js';
+import { S, sens, allCameras, activeReports, logAlert, logEvent, logTrip , cameraTickets } from './store.js';
 import { $, esc, dist, bearing, angleDiff, fmtDist, sayDist, streetKey, ago, bus, toast } from './util.js';
 import { sayType } from './reports.js';
 import { watchLocation, notify, beep, speak, vibrate, keepAwake, askNotifyPermission, unlockAudio, isNative } from './native.js';
@@ -155,12 +155,14 @@ function check(cur) {
     if (eta <= lead && d > 250 && !fired['far' + c.id]) {
       fired['far' + c.id] = 1;
       const mins = Math.max(1, Math.round(eta / 60));
-      raise('camera', `Camera in ~${mins} min`, `${c.name} · ${fmtDist(d)} ahead${c.limit ? ' · limit ' + c.limit + ' mph' : ''}`,
-        `Heads up. ${c.kind} camera in about ${mins} minute${mins > 1 ? 's' : ''}${c.limit ? '. Speed limit ' + c.limit : ''}.`);
+      const got = cameraTickets(c).length;
+      raise('camera', got ? `⚠️ Camera that got you · ~${mins} min` : `Camera in ~${mins} min`, `${c.name} · ${fmtDist(d)} ahead${c.limit ? ' · limit ' + c.limit + ' mph' : ''}${got ? ` · ticketed you ${got === 1 ? 'once' : got + ' times'}` : ''}`,
+        `Heads up. ${c.kind} camera in about ${mins} minute${mins > 1 ? 's' : ''}${c.limit ? '. Speed limit ' + c.limit : ''}.${got ? ' This one has ticketed you before.' : ''}`);
     }
     if (d <= 250 && !fired['near' + c.id]) {
       fired['near' + c.id] = 1;
-      raise('camera', 'Camera right ahead', `${c.name}${c.limit ? ' · keep it under ' + c.limit + ' mph' : ''}`, `${c.kind} camera right ahead.${c.limit ? ' Keep it under ' + c.limit + '.' : ''}`);
+      const got = cameraTickets(c).length;
+      raise('camera', got ? 'Camera that got you · right ahead' : 'Camera right ahead', `${c.name}${c.limit ? ' · keep it under ' + c.limit + ' mph' : ''}`, `${c.kind} camera right ahead.${c.limit ? ' Keep it under ' + c.limit + '.' : ''}${got ? ' It got you before.' : ''}`);
     }
   }
 

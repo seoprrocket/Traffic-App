@@ -319,3 +319,7 @@ body.nav .etabar,body.nav .fab,body.nav .legend,body.nav #pickbar{display:none!i
 body.nav .speedo{top:auto;bottom:86px}
 body.nav .maptools{top:118px}
 body.nav .alert{top:auto;bottom:calc(150px + env(safe-area-inset-bottom,0px))}
+.row.c.got{border-left-color:var(--danger)}
+.tag.bad{display:inline-block;font:600 11px/1 var(--sans,inherit);letter-spacing:.04em;text-transform:uppercase;padding:3px 7px;border-radius:6px;background:color-mix(in srgb,var(--danger) 16%,var(--surface));color:var(--fg);vertical-align:middle}
+.orow{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.row .ttl .tag.bad{white-space:nowrap;font-size:10.5px}

@@ -1,6 +1,6 @@
 // Shared UI pieces: sheets, the location picker, and the add/edit forms.
 import { S, save, upsertLocal, queue } from './store.js';
-import { $, $$, esc, toast, today, uuid, DIRS, scrub, bus } from './util.js';
+import { $, $$, esc, toast, today, uuid, DIRS, scrub, bus, dist } from './util.js';
 import { map, layers, icons, RTYPES, rcat } from './mapview.js';
 import { locateOnce } from './native.js';
 import { E } from './engine.js';
@@ -148,11 +148,11 @@ export function ticketForm(t, preset) {
   const base = t || { date: today(), type: 'Speed camera', ...(preset?.ticket || {}) };
   const st = t ? { lat: t.lat, lng: t.lng, label: t.street } : { ...(preset?.location || {}) };
   const cam = preset?.camera;
-  openSheet(`${head(t ? 'Edit ticket' : preset ? 'Check the scanned ticket' : 'Add ticket')}
+  openSheet(`${head(t ? 'Edit ticket' : preset?.title || (preset ? 'Check the scanned ticket' : 'Add ticket'))}
     ${preset ? `<div class="privacy">${preset.confidence === 'low' ? '<b>Low confidence.</b> ' : ''}${esc(preset.note || 'Check each field before saving.')}</div>` : ''}
     <form id="tf" class="sec">${ticketFields(base, 'tf')}
       ${!t && /camera/i.test(base.type || '') ? (cam
-        ? `<div class="privacy">Matches <b>${esc(cam.name)}</b> on the official camera list (${cam.meters} m away). You're already covered by its warning.</div>`
+        ? `<div class="privacy">${cam.meters ? `Matches <b>${esc(cam.name)}</b> on the official camera list (${cam.meters} m away). You're already covered by its warning.` : `This camera is on the official list, so you already get its ${S.db.settings.lead}-minute warning. Saving the ticket adds the caution alert and counts it in your stats.`}</div>`
         : `<label class="switch"><input type="checkbox" id="tf-cam" checked><span><b>Also mark a camera here</b><small>So you get the ${S.db.settings.lead}-minute warning next time.</small></span></label>`) : ''}
       <button class="btn primary" type="submit">${t ? 'Save changes' : 'Save ticket'}</button></form>`, (s) => {
     locWidget(s.querySelector('#tf-loc'), st, 'Where exactly', (x) => autoName(s.querySelector('#tf-street'), x));
@@ -160,7 +160,7 @@ export function ticketForm(t, preset) {
     s.querySelector('#tf').onsubmit = (e) => {
       e.preventDefault();
       if (st.lat == null) { toast('Set the location: search, use GPS, or pick on the map'); return; }
-      const rec = readTicket(s, 'tf', st, t ? { ...t } : { id: uuid(), created: Date.now() });
+      const rec = readTicket(s, 'tf', st, t ? { ...t } : { id: uuid(), created: Date.now(), cameraId: base.cameraId || null });
       upsertLocal('tickets', rec);
       if (s.querySelector('#tf-cam')?.checked) {
         upsertLocal('cameras', { id: uuid(), name: rec.street, lat: rec.lat, lng: rec.lng, kind: rec.type.replace(/ camera$/i, ''), limit: rec.limit, heading: preset?.heading ?? null });
@@ -170,6 +170,20 @@ export function ticketForm(t, preset) {
       if (preset?.onSaved) { preset.onSaved(rec); return; }
       go('map'); map.setView([rec.lat, rec.lng], 16);
     };
+  });
+}
+
+/** "I got a ticket from this camera": the ticket form pre-filled from an official camera. */
+const CAM_TYPE = { Speed: 'Speed camera', 'Red light': 'Red light camera', 'Stop sign': 'Stop sign camera', 'School zone': 'Speed camera', 'Bus lane': 'Bus lane', Truck: 'Other' };
+export function ticketFromCamera(c) {
+  if (!c) return;
+  ticketForm(null, {
+    title: 'Ticket from this camera',
+    ticket: { street: String(c.name || '').replace(/\s+(N|S|E|W|NE|NW|SE|SW)\/?B\b.*$/i, '').replace(/\b(\d+)\s+BLK\b/i, '$1 block').trim().slice(0, 160) || c.name, type: CAM_TYPE[c.kind] || 'Other', limit: c.limit || null,
+      notes: [c.jurisdiction, c.kind + ' camera'].filter(Boolean).join(' · '), cameraId: c.id },
+    location: { lat: c.lat, lng: c.lng, label: c.name },
+    camera: { name: c.name, meters: 0 },
+    note: 'Pre-filled from the official camera. Add the date, your speed and the fine, then save.',
   });
 }
 

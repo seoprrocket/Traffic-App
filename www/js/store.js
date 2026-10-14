@@ -1,6 +1,6 @@
 // Local state. Everything the app shows comes from here, so it works offline.
 // When signed in, cloud.js mirrors changes to Supabase through the outbox.
-import { uuid, isUuid, bus, toast } from './util.js';
+import { uuid, isUuid, bus, toast, dist } from './util.js';
 
 const KEY = 'ticketRadar.v1';
 
@@ -116,6 +116,11 @@ export const SENS = {
 export const sens = () => SENS[S.db.settings.sensitivity] || SENS.medium;
 
 /** All cameras the engine should watch: your pins plus official ones (if turned on). */
+/** Your tickets from this camera: linked when you marked it, or logged within 150 m of it. */
+export function cameraTickets(c) {
+  // Logged from a camera → that camera only (so the N/B and S/B cameras on one block aren't both blamed); otherwise anything within 150 m
+  return S.db.tickets.filter((t) => !t.example && !/^parking/i.test(t.type || '') && (t.cameraId ? t.cameraId === c.id : (t.lat != null && dist(t, c) <= 150)));
+}
 export function allCameras() {
   const mine = S.db.cameras;
   if (!S.db.settings.officialCams) return mine;

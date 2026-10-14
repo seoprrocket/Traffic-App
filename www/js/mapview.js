@@ -1,5 +1,5 @@
 // The home map: markers for tickets, cameras, community reports, and you.
-import { S, sens, activeReports } from './store.js';
+import { S, sens, activeReports, cameraTickets } from './store.js';
 import { esc, money, ago, DC, headingName, bus } from './util.js';
 import { carSvg } from './cars.js';
 
@@ -34,9 +34,12 @@ export function reportPopup(r) {
     ${voteable ? `<div class="popbtns"><button data-vote="1" data-id="${r.id}"${r.myVote === 1 ? ' disabled' : ''}>Still there</button><button data-vote="-1" data-id="${r.id}"${r.myVote === -1 ? ' disabled' : ''}>Gone</button></div>` : ''}`;
 }
 export function cameraPopup(c) {
+  const tix = cameraTickets(c);
+  const got = tix.length ? `<div style="margin-top:4px;color:#d42a2a;font-weight:700">🎫 Got you ${tix.length === 1 ? 'once' : tix.length + ' times'}${tix.some((t) => t.fine) ? ' · ' + money(tix.reduce((a, t) => a + (t.fine || 0), 0)) : ''}</div>` : '';
   return `<b>${esc(c.name)}</b><br>${esc(c.kind)} camera${c.limit ? ' · limit ' + c.limit + ' mph' : ''}<br>
     <small>${c.official ? (c.verified ? 'Official list' : 'From county website, not yet verified') + (c.jurisdiction ? ' · ' + esc(c.jurisdiction) : '') : 'Your pin · drag to adjust'}
-    ${c.heading != null ? ' · enforces ' + headingName(c.heading) : ''}</small>`;
+    ${c.heading != null ? ' · enforces ' + headingName(c.heading) : ''}</small>${got}
+    <div class="popbtns"><button data-tix="${esc(c.id)}">🎫 I got a ticket here</button></div>`;
 }
 
 export function drawMarkers() {
@@ -53,7 +56,8 @@ export function drawMarkers() {
   });
   if (S.db.settings.officialCams) {
     S.db.official.forEach((c) => {
-      L.circleMarker([c.lat, c.lng], { radius: 6, color: '#fff', weight: 1.5, fillColor: c.verified ? '#d99100' : '#b08a3a', fillOpacity: 0.95, renderer: canvas })
+      const got = cameraTickets(c).length > 0;
+      L.circleMarker([c.lat, c.lng], { radius: got ? 8 : 6, color: '#fff', weight: 1.5, fillColor: got ? '#d42a2a' : c.verified ? '#d99100' : '#b08a3a', fillOpacity: 0.95, renderer: canvas })
         .bindPopup(cameraPopup(c)).addTo(layers.official);
     });
   }
@@ -85,4 +89,6 @@ export function fitAll(me) {
 document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-vote]');
   if (b) { b.disabled = true; bus.emit('vote', b.dataset.id, +b.dataset.vote); }
+  const t = e.target.closest('[data-tix]');
+  if (t) { map.closePopup(); bus.emit('ticket-from-camera', t.dataset.tix); }
 });

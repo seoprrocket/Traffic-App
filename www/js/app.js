@@ -1,11 +1,11 @@
 // Boot, routing and wiring between modules.
-import { S, save, upsertLocal } from './store.js';
+import { S, save, upsertLocal , allCameras } from './store.js';
 import { $, $$, bus, debounce, toast, today, uuid } from './util.js';
 import { map, drawMarkers, placeMe, fitAll } from './mapview.js';
 import { E, startDrive, stopDrive, overBy } from './engine.js';
 import { locateOnce, unlockAudio, isNative } from './native.js';
 import { initAuth, flush, loadCommunity, loadOfficialCameras, vote, loadAgentOutputs, cloudConfigured } from './cloud.js';
-import { addChooser, scanTicket, reportForm, ticketFields, readTicket, bindTicketType, locWidget, pageHead, bindBack, geoFail } from './ui.js';
+import { addChooser, scanTicket, reportForm, ticketFields, readTicket, bindTicketType, ticketFromCamera, locWidget, pageHead, bindBack, geoFail } from './ui.js';
 import { renderList, renderStats, renderMore } from './pages-main.js';
 import { renderDrive, tripTick, paintEta } from './trip.js';
 import { renderParking } from './parking.js';
@@ -119,6 +119,7 @@ bus.on('log', debounce(() => { if (S.view === 'alert-log') renderLog(); }, 300))
 bus.on('auth', () => { loadOfficialCameras(true); rerender(); });
 bus.on('outbox', debounce(() => flush(), 1500));
 bus.on('vote', (id, v) => vote(id, v));
+bus.on('ticket-from-camera', (id) => ticketFromCamera(allCameras().find((c) => c.id === id) || S.db.official.find((c) => c.id === id)));
 bus.on('camera-moved', (id, lat, lng) => { const c = S.db.cameras.find((x) => x.id === id); if (c) { upsertLocal('cameras', { ...c, lat, lng }); toast('Camera position updated'); } });
 bus.on('drive', (on) => {
   $('#driveBtn').classList.toggle('on', on); $('#driveBtn').setAttribute('aria-pressed', on); $('#driveLbl').textContent = on ? 'Driving' : 'Start drive';

@@ -1,9 +1,9 @@
 // List, Stats, Route and More tabs, plus helpers other pages reuse.
-import { S, removeLocal, activeReports, allCameras } from './store.js';
+import { S, removeLocal, activeReports, allCameras, cameraTickets } from './store.js';
 import { $, $$, esc, money, dist, fmtDist, ago, segDist, streetKey, bus, toast } from './util.js';
 import { map, layers } from './mapview.js';
 import { E } from './engine.js';
-import { go, confirmDel, ticketForm, cameraForm, locWidget } from './ui.js';
+import { go, confirmDel, ticketForm, cameraForm, ticketFromCamera, locWidget } from './ui.js';
 
 // ---------------------------------------------------------------- shared analytics
 export function group(arr, keyFn) { const m = new Map(); arr.forEach((x) => { const k = keyFn(x); if (!m.has(k)) m.set(k, []); m.get(k).push(x); }); return m; }
@@ -66,25 +66,29 @@ export function renderList() {
 // Every official camera, searchable, grouped by area (List → Cameras)
 const DIRN = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 const CAM_ICON = { Speed: '📷', 'Red light': '🚦', 'Stop sign': '🛑', Truck: '🚚', 'School zone': '🏫', 'Bus lane': '🚌' };
-let camQ = '', camShow = 40;
+let camQ = '', camShow = 40, camGot = false;
 function officialList() {
   const all = S.db.official;
   if (!all.length) return '';
   const q = camQ.trim().toLowerCase();
-  const hit = q ? all.filter((c) => (c.name + ' ' + (c.jurisdiction || '') + ' ' + c.kind).toLowerCase().includes(q)) : all;
+  const gotIds = new Set(all.filter((c) => cameraTickets(c).length).map((c) => c.id));
+  let hit = q ? all.filter((c) => (c.name + ' ' + (c.jurisdiction || '') + ' ' + c.kind).toLowerCase().includes(q)) : all;
+  if (camGot) hit = hit.filter((c) => gotIds.has(c.id));
   const sorted = E.me ? [...hit].sort((a, b) => dist(E.me, a) - dist(E.me, b)) : [...hit].sort((a, b) => String(a.jurisdiction).localeCompare(String(b.jurisdiction)) || a.name.localeCompare(b.name, undefined, { numeric: true }));
   const shown = sorted.slice(0, camShow);
   let lastJ = null;
   const rows = shown.map((c) => {
     const head = !E.me && c.jurisdiction !== lastJ ? `<div class="grouplbl">${esc(c.jurisdiction || 'Other')}</div>` : '';
     lastJ = c.jurisdiction;
-    return `${head}<div class="row c"><span class="emo">${CAM_ICON[c.kind] || '📷'}</span><div class="main"><div class="ttl">${esc(c.name)}</div>
-      <div class="meta">${esc(c.kind)}${c.kind === 'School zone' ? '' : ' camera'}${c.limit ? ' · limit ' + c.limit + ' mph' : ''}${c.heading != null ? ' · catches ' + DIRN[Math.round(c.heading / 45) % 8] + '-bound' : ''}${E.me ? ' · ' + fmtDist(dist(E.me, c)) + ' from you · ' + esc(c.jurisdiction || '') : ''}${c.verified === false ? ' · <span class="bad">not yet verified</span>' : ''}</div></div>
-      <div class="acts"><button class="sbtn" data-ogo="${esc(c.id)}">Map</button></div></div>`;
+    const n = cameraTickets(c).length;
+    return `${head}<div class="row c${n ? ' got' : ''}"><span class="emo">${n ? '🎫' : CAM_ICON[c.kind] || '📷'}</span><div class="main"><div class="ttl">${esc(c.name)}${n ? ` <span class="tag bad">got you ${n === 1 ? 'once' : n + '×'}</span>` : ''}</div>
+      <div class="meta">${esc(c.kind)}${c.kind === 'School zone' ? '' : ' camera'}${c.limit ? ' · limit ' + c.limit + ' mph' : ''}${c.heading != null ? ' · catches ' + DIRN[Math.round(c.heading / 45) % 8] + '-bound' : ''}${E.me ? ' · ' + fmtDist(dist(E.me, c)) + ' from you · ' + esc(c.jurisdiction || '') : ''}${c.verified === false ? ' · <span class="bad">not yet verified</span>' : ''}</div>
+      <div class="orow"><button class="sbtn" data-otix="${esc(c.id)}" title="Log a ticket from this camera">🎫 Got a ticket</button><button class="sbtn" data-ogo="${esc(c.id)}">Map</button></div></div></div>`;
   }).join('');
   return `<h3 class="sech" style="margin-top:18px">Official cameras</h3>
     <input type="search" id="cam-q" value="${esc(camQ)}" placeholder="Search ${all.length} cameras by street or school" autocomplete="off" style="width:100%;box-sizing:border-box;margin-bottom:8px">
-    <p class="note" style="margin:0 0 6px">${hit.length === all.length ? `All ${all.length}` : `${hit.length} of ${all.length}`}${E.me ? ', closest first' : ', by area'}.</p>
+    <div class="btns" style="margin-bottom:6px"><button class="btn${camGot ? ' primary' : ''}" id="cam-got">🎫 Cameras that got me${gotIds.size ? ` (${gotIds.size})` : ''}</button></div>
+    <p class="note" style="margin:0 0 6px">${hit.length === all.length ? `All ${all.length}` : `${hit.length} of ${all.length}`}${E.me ? ', closest first' : ', by area'}. Tap <b>🎫 Got a ticket</b> on a camera to log a ticket from it; it then shows in red on the map and warns you harder.</p>
     ${rows || '<div class="empty">No camera matches that. Try a shorter street name.</div>'}
     ${sorted.length > camShow ? `<div class="btns"><button class="btn" id="cam-more">Show ${Math.min(100, sorted.length - camShow)} more</button></div>` : ''}`;
 }
@@ -92,6 +96,8 @@ function bindOfficial(host) {
   const q = host.querySelector('#cam-q');
   if (q) q.addEventListener('input', () => { camQ = q.value; camShow = 40; const pos = q.selectionStart; renderList(); const q2 = host.querySelector('#cam-q'); if (q2) { q2.focus(); try { q2.setSelectionRange(pos, pos); } catch { /* ok */ } } });
   host.querySelector('#cam-more')?.addEventListener('click', () => { camShow += 100; renderList(); });
+  host.querySelector('#cam-got')?.addEventListener('click', () => { camGot = !camGot; camShow = 40; renderList(); });
+  $$('[data-otix]', host).forEach((b) => (b.onclick = () => ticketFromCamera(S.db.official.find((y) => y.id === b.dataset.otix))));
   $$('[data-ogo]', host).forEach((b) => (b.onclick = () => { const x = S.db.official.find((y) => y.id === b.dataset.ogo); if (x) { go('map'); map.setView([x.lat, x.lng], 17); } }));
 }
 
