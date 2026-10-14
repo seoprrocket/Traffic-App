@@ -28,6 +28,10 @@
   <main>
     <section class="view mapview" id="view-map">
       <div id="map" class="mapbox"></div>
+      <div class="mapsearch" id="mapsearch">
+        <div class="ms-bar"><span class="ms-glass" aria-hidden="true">🔍</span><input id="ms-q" type="search" placeholder="Search cameras, streets, addresses" autocomplete="off" aria-label="Search cameras, streets and addresses"><button id="ms-x" type="button" aria-label="Clear search" hidden>✕</button></div>
+        <div class="ms-res" id="ms-res" hidden></div>
+      </div>
       <div class="speedo" id="speedo" hidden>
         <div class="sign" id="spdSign"><b>YOUR SPEED</b><i id="spdVal">0</i></div>
         <div class="sign" id="limSign" hidden><b>SPEED LIMIT</b><i id="limVal">25</i></div>
@@ -43,6 +47,7 @@
         <div><span class="sw" style="background:var(--you);border-radius:50%"></span>You</div>
         <div><span class="sw" style="background:var(--danger)"></span>Ticket spot</div>
         <div><span class="sw" style="background:var(--warn)"></span>Camera</div>
+        <div><span class="sw" style="background:#0d9488;border-radius:50%"></span>Driven past</div>
         <div><span class="sw" style="background:var(--report)"></span>Community</div>
         <div><span class="sw" style="background:#7a3fd1"></span>Parking ticket</div>
       </div>
@@ -55,6 +60,7 @@
       <div class="seg" id="listSeg">
         <button data-k="tickets" aria-pressed="true">Tickets</button>
         <button data-k="cameras" aria-pressed="false">Cameras</button>
+        <button data-k="roads" aria-pressed="false">My roads</button>
       </div>
       <div class="sec" id="listBody"></div>
     </div></section>

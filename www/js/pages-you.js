@@ -176,7 +176,7 @@ export function openSettings() {
   <div class="sec">
     <label class="f">Default alert type<select id="s-at">${atOpts(st.alertType)}</select><small class="hint">Applied to new ticket locations and all camera warnings.</small></label>
     <div class="grid2">
-      <label class="f">Camera warning (minutes ahead)<input type="number" id="s-lead" min="1" max="15" value="${st.lead}"></label>
+      <label class="f">First camera warning<select id="s-lead">${[2, 4, 6].concat([2, 4, 6].includes(+st.lead) ? [] : [+st.lead]).sort((a, b) => a - b).map((m) => `<option value="${m}"${+st.lead === m ? ' selected' : ''}>${m} minutes before</option>`).join('')}</select><small class="hint">Spoken first, then "one minute to camera", then "camera right ahead".</small></label>
       <label class="f">Ticket-zone radius (meters)<input type="number" id="s-rad" min="50" max="1000" step="50" value="${st.ticketRadius}"></label>
     </div>
     <h3 class="sech">Your car on the map</h3>
@@ -199,6 +199,7 @@ export function openSettings() {
     <div id="s-push" class="note">Checking…</div>
     <h3 class="sech">More</h3>
     <label class="switch"><input type="checkbox" id="s-off" ${st.officialCams ? 'checked' : ''}><span><b>Official camera lists</b><small>Warn me about the cameras DC, Montgomery County and Prince George's County publish, plus county lists, not just my pins.</small></span></label>
+    <label class="switch"><input type="checkbox" id="s-log" ${st.logPasses !== false ? 'checked' : ''}><span><b>Log the cameras I drive past</b><small>Builds the "My roads" list with your speed at each camera, so you can see where you'd get a ticket.</small></span></label>
     <label class="switch"><input type="checkbox" id="s-lim" ${st.speedLimits ? 'checked' : ''}><span><b>Show the speed limit for every road</b><small>Looks up posted limits from OpenStreetMap as you drive. Uses a little data.</small></span></label>
     <label class="switch"><input type="checkbox" id="s-hf" ${st.handsFreeAuto ? 'checked' : ''}><span><b>Hands-free screen while driving</b><small>Big speed readout and one-tap report buttons when drive mode starts.</small></span></label>
     <label class="switch"><input type="checkbox" id="s-share" ${st.share ? 'checked' : ''}><span><b>Share anonymized data</b><small>Your new tickets are anonymized and shared with the community.</small></span></label>
@@ -209,9 +210,9 @@ export function openSettings() {
     <div class="btns"><button class="btn danger" id="s-clr">Remove example entries</button></div>
   </div>`, (s) => {
     const read = () => Object.assign(S.db.settings, {
-      alertType: s.querySelector('#s-at').value, lead: Math.min(15, Math.max(1, +s.querySelector('#s-lead').value || 5)),
+      alertType: s.querySelector('#s-at').value, lead: Math.min(15, Math.max(1, +s.querySelector('#s-lead').value || 4)),
       ticketRadius: Math.min(1000, Math.max(50, +s.querySelector('#s-rad').value || 300)), share: s.querySelector('#s-share').checked,
-      ai: s.querySelector('#s-ai').checked, sensitivity: s.querySelector('#s-sens').value, officialCams: s.querySelector('#s-off').checked,
+      ai: s.querySelector('#s-ai').checked, sensitivity: s.querySelector('#s-sens').value, officialCams: s.querySelector('#s-off').checked, logPasses: s.querySelector('#s-log').checked,
       speedLimits: s.querySelector('#s-lim').checked, handsFreeAuto: s.querySelector('#s-hf').checked,
       speedOverBy: s.querySelector('#s-over').value === '' ? '' : +s.querySelector('#s-over').value,
       speedMax: Math.max(0, Math.min(120, +s.querySelector('#s-max').value || 0)),

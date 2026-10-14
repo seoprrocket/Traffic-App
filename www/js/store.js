@@ -7,16 +7,16 @@ const KEY = 'ticketRadar.v1';
 export const DEFAULT_SETTINGS = {
   lead: 5, ticketRadius: 300, alertType: 'voice', share: false, ai: true, sensitivity: 'medium',
   officialCams: true, speedLimits: true, handsFreeAuto: true,
-  carStyle: 'dot', carColor: '#f4f5f7', navMuted: false, parkLayer: false, speedOverBy: 5, speedMax: 0, roadBumps: true, roadCurves: true, roadLimits: true, roadTolls: true,
+  carStyle: 'dot', carColor: '#f4f5f7', navMuted: false, parkLayer: false, logPasses: true, speedOverBy: 5, speedMax: 0, roadBumps: true, roadCurves: true, roadLimits: true, roadTolls: true,
 };
 export const DEFAULT_PROFILE = { name: '', homeLabel: '', workLabel: '', avoidRisk: 'warn', emailCoach: true };
-const LISTS = ['tickets', 'cameras', 'reports', 'routes', 'commutes', 'events', 'alerts', 'trips', 'outbox', 'official', 'community', 'hotspots', 'coach', 'predictions', 'disputes', 'plans'];
+const LISTS = ['tickets', 'cameras', 'reports', 'routes', 'commutes', 'events', 'alerts', 'trips', 'outbox', 'official', 'community', 'hotspots', 'coach', 'predictions', 'disputes', 'plans', 'passes'];
 
 function seed() {
   return {
     v: 3,
     tickets: [{ id: uuid(), street: 'Example — New York Ave NE', lat: 38.9146, lng: -76.9859, date: '2026-08-14', time: '', type: 'Speed camera', fine: 125, speed: 42, limit: 30, notes: 'Sample entry so you can see how it works. Edit or delete it.', example: true, shared: false, alertType: 'voice' }],
-    cameras: [], reports: [], routes: [], commutes: [], events: [], alerts: [], trips: [], outbox: [],
+    cameras: [], reports: [], routes: [], commutes: [], events: [], alerts: [], trips: [], outbox: [], passes: [],
     official: [], officialAt: 0, community: [], communityAt: 0, hotspots: [], coach: [], predictions: [], disputes: [],
     settings: { ...DEFAULT_SETTINGS }, profile: { ...DEFAULT_PROFILE },
     acceptedTerms: null, syncedUser: null, lastPull: 0,
@@ -86,6 +86,7 @@ export function removeLocal(list, id) {
   if (list === 'routes') S.db.commutes.filter((c) => c.routeId === id).forEach((c) => removeLocal('commutes', c.id));
   if (TABLE[list]) queue(TABLE[list], 'delete', { id });
   if (list === 'reports') queue('reports', 'delete', { id });
+  if (list === 'passes') queue('camera_passes', 'delete', { id });
   save();
 }
 
@@ -101,6 +102,27 @@ export function logEvent(kind, zone) {
   queue('drive_events', 'insert', { id: e.id });
   persist(); bus.emit('log');
 }
+/** Auto-log: you just drove into a camera's zone. One row per pass; the speed is updated to your fastest while in the zone. */
+export function logPass(c, mph) {
+  const p = { id: uuid(), cameraId: c.id, name: c.name, kind: c.kind, limit: c.limit || null, jurisdiction: c.jurisdiction || (c.official ? '' : 'Your pin'), lat: c.lat, lng: c.lng, time: Date.now(), mph: Math.round(mph), over: c.limit ? Math.round(mph) - c.limit : null };
+  S.db.passes.unshift(p); if (S.db.passes.length > 3000) S.db.passes.length = 3000;
+  queue('camera_passes', 'insert', { id: p.id });
+  persist(); bus.emit('log'); bus.emit('pass', p);
+  return p;
+}
+export function updatePass(p, mph) {
+  const m = Math.round(mph); if (m <= p.mph) return;
+  p.mph = m; p.over = p.limit ? m - p.limit : null;
+  queue('camera_passes', 'upsert', { id: p.id });
+  persist(); bus.emit('log');
+}
+/** Speed at which this camera's jurisdiction starts ticketing: DC from 11 over the limit, Maryland from 12 over. */
+export function ticketSpeed(c) {
+  if (!c.limit) return null;
+  return c.limit + (/DC|District/i.test(c.jurisdiction || '') ? 11 : 12);
+}
+/** Everything you logged while driving past this camera, newest first. */
+export const cameraPasses = (c) => S.db.passes.filter((p) => p.cameraId === c.id);
 export function logTrip(t) {
   const trip = { id: uuid(), ...t };
   S.db.trips.unshift(trip); if (S.db.trips.length > 300) S.db.trips.length = 300;

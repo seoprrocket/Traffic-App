@@ -1,5 +1,5 @@
 // Drive mode: follows your GPS and fires the warnings.
-import { S, sens, allCameras, activeReports, logAlert, logEvent, logTrip , cameraTickets } from './store.js';
+import { S, sens, allCameras, activeReports, logAlert, logEvent, logTrip , cameraTickets, logPass, updatePass } from './store.js';
 import { $, esc, dist, bearing, angleDiff, fmtDist, sayDist, streetKey, ago, bus, toast } from './util.js';
 import { sayType } from './reports.js';
 import { watchLocation, notify, beep, speak, vibrate, keepAwake, askNotifyPermission, unlockAudio, isNative } from './native.js';
@@ -117,6 +117,14 @@ function onFix(p) {
   bus.emit('fix', p);
 }
 
+// Auto-log of every camera you drive past (My roads tab): one row per pass, speed = your fastest inside the 250 m zone
+const passing = {};
+function trackPass(c, isIn, mph) {
+  const p = passing[c.id];
+  if (isIn && !p) { if (S.db.settings.logPasses !== false) passing[c.id] = logPass(c, mph); }
+  else if (isIn && p) updatePass(p, mph);
+  else if (!isIn && p) delete passing[c.id];
+}
 function geofence(id, name, zoneType, isIn, mph, limit) {
   if (isIn && !inside[id]) { inside[id] = 1; logEvent('enter', { zone: name, zoneType, speed: Math.round(mph), limit: limit || null }); }
   else if (!isIn && inside[id]) { delete inside[id]; logEvent('exit', { zone: name, zoneType, speed: Math.round(mph), limit: limit || null }); }
@@ -140,6 +148,7 @@ function check(cur) {
     const d = dist(cur, c);
     if (d > reach * 1.5 + 800) { delete fired['far' + c.id]; }
     if (d > 600) delete fired['near' + c.id];
+    if (d > 2500) delete fired['one' + c.id];
     if (d > 12000) { delete prevD[c.id]; continue; }
     const p = prevD[c.id]; prevD[c.id] = d;
     const approaching = p == null || d < p - 3 || d < 150;
@@ -148,6 +157,7 @@ function check(cur) {
     const ahead = isAhead(cur, c, d);
     const live = approaching && rightWay && ahead;
     geofence('c' + c.id, c.name, 'Camera', d <= 250 && rightWay, mph, c.limit);
+    trackPass(c, d <= 250 && rightWay, mph);
     if (!live) continue;
     candidates.push({ kind: 'camera', label: `${c.kind} camera`, name: c.name, d, limit: c.limit });
     if (d < 800 && c.limit && d < limitD) { limitD = d; limitNear = c.limit; }
@@ -158,9 +168,17 @@ function check(cur) {
       const got = cameraTickets(c).length;
       raise('camera', got ? `⚠️ Camera that got you · ~${mins} min` : `Camera in ~${mins} min`, `${c.name} · ${fmtDist(d)} ahead${c.limit ? ' · limit ' + c.limit + ' mph' : ''}${got ? ` · ticketed you ${got === 1 ? 'once' : got + ' times'}` : ''}`,
         `Heads up. ${c.kind} camera in about ${mins} minute${mins > 1 ? 's' : ''}${c.limit ? '. Speed limit ' + c.limit : ''}.${got ? ' This one has ticketed you before.' : ''}`);
+      if (eta <= 60) fired['one' + c.id] = 1;                 // already inside the last minute: one call-out is enough
+    }
+    // Second call-out: one minute out ("One minute to camera"), when the first warning was further out than that
+    if (lead > 75 && eta <= 60 && d > 250 && fired['far' + c.id] && !fired['one' + c.id]) {
+      fired['one' + c.id] = 1;
+      raise('camera', 'Camera in 1 min', `${c.name} · ${fmtDist(d)} ahead${c.limit ? ' · limit ' + c.limit + ' mph' : ''}`,
+        `One minute to ${String(c.kind).toLowerCase()} camera.${c.limit ? ' Limit ' + c.limit + '.' : ''}`);
     }
     if (d <= 250 && !fired['near' + c.id]) {
       fired['near' + c.id] = 1;
+      fired['one' + c.id] = 1;
       const got = cameraTickets(c).length;
       raise('camera', got ? 'Camera that got you · right ahead' : 'Camera right ahead', `${c.name}${c.limit ? ' · keep it under ' + c.limit + ' mph' : ''}`, `${c.kind} camera right ahead.${c.limit ? ' Keep it under ' + c.limit + '.' : ''}${got ? ' It got you before.' : ''}`);
     }

@@ -1,5 +1,5 @@
 // List, Stats, Route and More tabs, plus helpers other pages reuse.
-import { S, removeLocal, activeReports, allCameras, cameraTickets } from './store.js';
+import { S, removeLocal, activeReports, allCameras, cameraTickets, ticketSpeed } from './store.js';
 import { $, $$, esc, money, dist, fmtDist, ago, segDist, streetKey, bus, toast } from './util.js';
 import { map, layers } from './mapview.js';
 import { E } from './engine.js';
@@ -32,11 +32,51 @@ export function summary() {
   };
 }
 
+// ---------------------------------------------------------------- My roads: every camera you've driven past, logged automatically
+let roadsSort = 'recent';
+function roadsList(host) {
+  const P = S.db.passes;
+  const by = new Map();
+  P.forEach((p) => {
+    let g = by.get(p.cameraId);
+    if (!g) { g = { ...p, n: 0, fastest: 0, last: 0, overs: 0, ticketable: 0 }; by.set(p.cameraId, g); }
+    g.n++; g.last = Math.max(g.last, p.time); g.fastest = Math.max(g.fastest, p.mph || 0);
+    const tk = ticketSpeed(p);
+    if (p.limit && p.mph > p.limit) g.overs++;
+    if (tk && p.mph >= tk) g.ticketable++;
+  });
+  const cams = [...by.values()];
+  const risky = cams.filter((g) => g.ticketable), close = cams.filter((g) => !g.ticketable && g.overs);
+  cams.sort((a, b) => roadsSort === 'risk' ? (b.ticketable - a.ticketable) || (b.overs - a.overs) || (b.last - a.last) : roadsSort === 'often' ? (b.n - a.n) || (b.last - a.last) : b.last - a.last);
+  const seg = `<div class="seg small" id="roadsSort"><button data-s="recent" aria-pressed="${roadsSort === 'recent'}">Recent</button><button data-s="often" aria-pressed="${roadsSort === 'often'}">Most driven</button><button data-s="risk" aria-pressed="${roadsSort === 'risk'}">Ticket risk</button></div>`;
+  const intro = `<p class="note" style="margin:0">Every camera you drive past is logged here automatically, with your fastest speed through its zone. DC tickets from <b>11 mph over</b> the limit, Maryland from <b>12 over</b>.${S.db.settings.logPasses === false ? ' <b>Logging is turned off in Settings.</b>' : ''}</p>`;
+  const sum = cams.length ? `<div class="roadsum"><span><b>${cams.length}</b> camera${cams.length === 1 ? '' : 's'} on your roads</span><span class="${risky.length ? 'bad' : ''}"><b>${risky.length}</b> at ticket speed</span><span class="${close.length ? 'warn' : ''}"><b>${close.length}</b> over the limit</span></div>` : '';
+  host.innerHTML = intro + sum + (cams.length ? seg + cams.map((g) => {
+    const tk = ticketSpeed(g);
+    const tag = g.ticketable ? `<span class="tag bad">Ticket speed</span>` : g.overs ? `<span class="tag md">Over the limit</span>` : g.limit ? `<span class="tag lo">Under the limit</span>` : '';
+    const risk = tk ? (g.fastest >= tk ? `You hit <b>${g.fastest} mph</b> here — ${tk}+ gets a ticket.` : g.fastest > g.limit ? `Fastest <b>${g.fastest} mph</b> · a ticket starts at <b>${tk}</b>.` : `Fastest <b>${g.fastest} mph</b> · keep it under ${tk} to stay safe.`) : `Fastest <b>${g.fastest} mph</b>${g.limit ? ' · limit ' + g.limit : ' · no posted limit on file'}.`;
+    return `<div class="row c${g.ticketable ? ' got' : ''}"><div class="main"><div class="ttl">${esc(g.name)}${tag}</div>
+      <div class="meta">${esc(g.kind)} camera${g.limit ? ' · limit ' + g.limit + ' mph' : ''}${g.jurisdiction ? ' · ' + esc(g.jurisdiction) : ''}</div>
+      <div class="meta">Driven past ${g.n === 1 ? 'once' : g.n + ' times'} · last ${ago(g.last)}${g.overs ? ` · over the limit ${g.overs === 1 ? 'once' : g.overs + ' times'}` : ''}</div>
+      <div class="meta">${risk}</div>
+      <div class="orow"><button class="sbtn" data-rgo="${esc(g.cameraId)}">Map</button><button class="sbtn" data-rtix="${esc(g.cameraId)}">🎫 Got a ticket here</button><button class="sbtn danger" data-rdel="${esc(g.cameraId)}">Forget</button></div></div></div>`;
+  }).join('') : `<div class="empty">Nothing logged yet. Start a drive on the Map tab and every camera you pass shows up here, with your speed against its limit.</div>`);
+  $$('#roadsSort button', host).forEach((b) => (b.onclick = () => { roadsSort = b.dataset.s; roadsList(host); }));
+  const cam = (id) => allCameras().find((c) => c.id === id) || S.db.official.find((c) => c.id === id) || by.get(id);
+  $$('[data-rgo]', host).forEach((b) => (b.onclick = () => { const c = cam(b.dataset.rgo); go('map'); map.setView([c.lat, c.lng], 17); }));
+  $$('[data-rtix]', host).forEach((b) => (b.onclick = () => { const c = cam(b.dataset.rtix); if (c) ticketFromCamera({ ...c, id: b.dataset.rtix }); }));
+  $$('[data-rdel]', host).forEach((b) => (b.onclick = () => confirmDel(b, () => {
+    S.db.passes.filter((p) => p.cameraId === b.dataset.rdel).forEach((p) => removeLocal('passes', p.id));
+    roadsList(host);
+  })));
+}
+
 // ---------------------------------------------------------------- List
 let listKind = 'tickets';
 $$('#listSeg button').forEach((b) => (b.onclick = () => { listKind = b.dataset.k; $$('#listSeg button').forEach((x) => x.setAttribute('aria-pressed', x === b)); renderList(); }));
 export function renderList() {
   const host = $('#listBody');
+  if (listKind === 'roads') { roadsList(host); return; }
   if (listKind === 'tickets') {
     const rows = [...S.db.tickets].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     host.innerHTML = rows.length ? rows.map((t) => `<div class="row t"><div class="main"><div class="ttl">${esc(t.street)}${t.example ? '<span class="tag">Example</span>' : ''}${t.shared ? '<span class="tag">Shared</span>' : ''}</div>

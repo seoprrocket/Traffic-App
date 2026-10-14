@@ -81,6 +81,7 @@ const toRow = {
   reports: (r) => ({ id: r.id, type: r.type, lat: r.lat, lng: r.lng, place: r.place || null, note: scrub(r.note) || null }),
   alert_log: (a) => ({ id: a.id, kind: a.kind, title: a.title, detail: a.sub || null, at: new Date(a.time).toISOString() }),
   drive_events: (e) => ({ id: e.id, kind: e.kind, zone: e.zone, zone_type: e.zoneType, speed: e.speed ?? null, speed_limit: e.limit ?? null, at: new Date(e.time).toISOString() }),
+  camera_passes: (p) => ({ id: p.id, camera_id: p.cameraId, name: p.name, kind: p.kind, speed_limit: p.limit ?? null, jurisdiction: p.jurisdiction || null, lat: p.lat, lng: p.lng, mph: p.mph ?? null, at: new Date(p.time).toISOString() }),
   trips: (t) => ({ id: t.id, start_lat: t.start.lat, start_lng: t.start.lng, end_lat: t.end.lat, end_lng: t.end.lng,
     started_at: new Date(t.startedAt).toISOString(), ended_at: new Date(t.endedAt).toISOString(), meters: t.meters, max_mph: t.maxMph, alerts: t.alerts || 0 }),
 };
@@ -94,8 +95,9 @@ const fromRow = {
     status: r.status, reason: r.moderation_reason, expires: Date.parse(r.expires_at), confirms: r.confirms, denies: r.denies }),
   alert_log: (r) => ({ id: r.id, kind: r.kind, title: r.title, sub: r.detail || '', time: Date.parse(r.at) }),
   drive_events: (r) => ({ id: r.id, kind: r.kind, zone: r.zone, zoneType: r.zone_type, speed: r.speed, limit: r.speed_limit, time: Date.parse(r.at) }),
+  camera_passes: (r) => ({ id: r.id, cameraId: r.camera_id, name: r.name, kind: r.kind, limit: r.speed_limit, jurisdiction: r.jurisdiction || '', lat: r.lat, lng: r.lng, mph: r.mph, over: r.speed_limit && r.mph != null ? r.mph - r.speed_limit : null, time: Date.parse(r.at), created: Date.parse(r.at) }),
 };
-const LOCAL = { tickets: 'tickets', cameras: 'cameras', routes: 'routes', commutes: 'commutes', reports: 'reports', alert_log: 'alerts', drive_events: 'events', trips: 'trips' };
+const LOCAL = { tickets: 'tickets', cameras: 'cameras', routes: 'routes', commutes: 'commutes', reports: 'reports', alert_log: 'alerts', drive_events: 'events', trips: 'trips', camera_passes: 'passes' };
 
 // ---------------------------------------------------------------- push
 let flushing = false;
@@ -165,6 +167,7 @@ export async function syncNow() {
     await pull('reports', (q) => q.eq('user_id', uid).gte('created_at', new Date(Date.now() - 30 * 86400e3).toISOString()).order('created_at', { ascending: false }));
     await pull('alert_log', (q) => q.order('at', { ascending: false }).limit(300));
     await pull('drive_events', (q) => q.order('at', { ascending: false }).limit(500));
+    try { await pull('camera_passes', (q) => q.order('at', { ascending: false }).limit(3000)); } catch (e) { console.warn('camera_passes not set up yet', e); }
 
     const { data: p } = await sb.from('profiles').select('*').eq('id', uid).single();
     if (p) {

@@ -1,5 +1,5 @@
 // The home map: markers for tickets, cameras, community reports, and you.
-import { S, sens, activeReports, cameraTickets } from './store.js';
+import { S, sens, activeReports, cameraTickets, cameraPasses, ticketSpeed } from './store.js';
 import { esc, money, ago, DC, headingName, bus } from './util.js';
 import { carSvg } from './cars.js';
 
@@ -36,29 +36,37 @@ export function reportPopup(r) {
 export function cameraPopup(c) {
   const tix = cameraTickets(c);
   const got = tix.length ? `<div style="margin-top:4px;color:#d42a2a;font-weight:700">🎫 Got you ${tix.length === 1 ? 'once' : tix.length + ' times'}${tix.some((t) => t.fine) ? ' · ' + money(tix.reduce((a, t) => a + (t.fine || 0), 0)) : ''}</div>` : '';
+  const passes = cameraPasses(c), fastest = passes.reduce((m, p) => Math.max(m, p.mph || 0), 0), tk = ticketSpeed(c);
+  const drove = passes.length ? `<div style="margin-top:4px;color:#0d9488;font-weight:600">🚗 Driven past ${passes.length === 1 ? 'once' : passes.length + ' times'} · fastest ${fastest} mph${tk ? (fastest >= tk ? ' · <span style="color:#d42a2a">ticket speed</span>' : ' · tickets from ' + tk) : ''}</div>` : '';
   return `<b>${esc(c.name)}</b><br>${esc(c.kind)} camera${c.limit ? ' · limit ' + c.limit + ' mph' : ''}<br>
     <small>${c.official ? (c.verified ? 'Official list' : 'From county website, not yet verified') + (c.jurisdiction ? ' · ' + esc(c.jurisdiction) : '') : 'Your pin · drag to adjust'}
-    ${c.heading != null ? ' · enforces ' + headingName(c.heading) : ''}</small>${got}
+    ${c.heading != null ? ' · enforces ' + headingName(c.heading) : ''}</small>${got}${drove}
     <div class="popbtns"><button data-tix="${esc(c.id)}">🎫 I got a ticket here</button></div>`;
 }
 
+const byId = { official: new Map(), camera: new Map(), ticket: new Map() };
+/** The marker drawn for an official camera, one of your pins, or a ticket (so search can open its popup). */
+export const markerFor = (kind, id) => byId[kind]?.get(id) || null;
 export function drawMarkers() {
   Object.values(layers).forEach((l) => { if (l !== layers.route && l !== layers.temp) l.clearLayers(); });
+  Object.values(byId).forEach((m) => m.clear());
   const rr = S.db.settings.ticketRadius * sens().f;
   S.db.tickets.forEach((t) => {
     const pk = /^parking/i.test(t.type || '');
     if (!pk) L.circle([t.lat, t.lng], { radius: rr, color: '#d42a2a', weight: 1, fillOpacity: 0.08, renderer: canvas }).addTo(layers.tickets);
-    L.marker([t.lat, t.lng], { icon: pk ? icons.parkTicket : icons.ticket }).bindPopup(`<b>${esc(t.street)}</b><br>${esc(t.type)}${t.violation ? ': ' + esc(t.violation) : ''} · ${esc(t.date)}<br>${t.fine ? money(t.fine) : ''}${t.speed ? ' · ' + t.speed + ' mph' : ''}${t.limit ? ' in a ' + t.limit : ''}`).addTo(layers.tickets);
+    byId.ticket.set(t.id, L.marker([t.lat, t.lng], { icon: pk ? icons.parkTicket : icons.ticket }).bindPopup(`<b>${esc(t.street)}</b><br>${esc(t.type)}${t.violation ? ': ' + esc(t.violation) : ''} · ${esc(t.date)}<br>${t.fine ? money(t.fine) : ''}${t.speed ? ' · ' + t.speed + ' mph' : ''}${t.limit ? ' in a ' + t.limit : ''}`).addTo(layers.tickets));
   });
   S.db.cameras.forEach((c) => {
     const m = L.marker([c.lat, c.lng], { icon: icons.camera, draggable: true }).bindPopup(cameraPopup(c)).addTo(layers.cameras);
+    byId.camera.set(c.id, m);
     m.on('dragend', (e) => { const p = e.target.getLatLng(); bus.emit('camera-moved', c.id, +p.lat.toFixed(6), +p.lng.toFixed(6)); });
   });
   if (S.db.settings.officialCams) {
+    const driven = new Set(S.db.passes.map((p) => p.cameraId));
     S.db.official.forEach((c) => {
-      const got = cameraTickets(c).length > 0;
-      L.circleMarker([c.lat, c.lng], { radius: got ? 8 : 6, color: '#fff', weight: 1.5, fillColor: got ? '#d42a2a' : c.verified ? '#d99100' : '#b08a3a', fillOpacity: 0.95, renderer: canvas })
-        .bindPopup(cameraPopup(c)).addTo(layers.official);
+      const got = cameraTickets(c).length > 0, past = driven.has(c.id);
+      byId.official.set(c.id, L.circleMarker([c.lat, c.lng], { radius: got ? 8 : past ? 7 : 6, color: '#fff', weight: 1.5, fillColor: got ? '#d42a2a' : past ? '#0d9488' : c.verified ? '#d99100' : '#b08a3a', fillOpacity: 0.95, renderer: canvas })
+        .bindPopup(cameraPopup(c)).addTo(layers.official));
     });
   }
   activeReports().forEach((r) => L.marker([r.lat, r.lng], { icon: reportIcon(r) }).bindPopup(reportPopup(r)).addTo(layers.reports));
