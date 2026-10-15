@@ -75,7 +75,7 @@ export function renderAccount() {
       (S.user ? `<div class="card sec"><h2>Signed in</h2><p style="margin:0"><b>${esc(whoAmI())}</b></p>
         <p class="note" style="margin:0">${out ? `${out} change${out > 1 ? 's' : ''} waiting to sync.` : 'Everything is synced.'} Last sync ${S.db.lastPull ? stamp(S.db.lastPull) : 'never'}.</p>
         <div class="btns"><button class="btn" id="ac-sync">Sync now</button><button class="btn" id="ac-pw">${S.user.email ? 'Set or change password' : 'Add a password'}</button><button class="btn" id="ac-out">Sign out</button></div>
-        <p class="note small" style="margin:0">With a password set, you can sign in with just your email and password next time — no email link needed.</p></div>
+        <p class="note small" style="margin:0">You stay signed in on this phone until you tap Sign out. With a password set, signing in on another phone takes just your email and password.</p></div>
       <div class="card sec"><h2>Delete account</h2><p class="note" style="margin:0">Permanently deletes your account and everything stored on the server: tickets, routes, drive history and reports. This can't be undone. Export a backup first if you want to keep a copy.</p>
         <div class="btns"><button class="btn danger" id="ac-del">Delete my account</button></div></div>`
     : `<div class="card sec"><h2>Sign in or create an account</h2>

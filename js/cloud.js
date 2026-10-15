@@ -15,12 +15,27 @@ export const sb = cloudConfigured
   : null;
 
 // ---------------------------------------------------------------- auth
+// Stay signed in until "Sign out": the session (with its refresh token) lives in this phone's storage and is
+// refreshed quietly whenever the app comes back to the foreground or back online. Nothing in the app signs you
+// out on its own; only the Sign out button (or deleting the account) does.
+let leaving = false;                                               // true while *we* are signing out on purpose
 export async function initAuth() {
   if (!sb) return;
+  try { if (navigator.storage?.persist) navigator.storage.persist().catch(() => {}); } catch { /* not offered */ }   // ask the phone not to evict the app's storage
   await fromEmailLink();
   const { data } = await sb.auth.getSession();
   setUser(data.session?.user || null);
-  sb.auth.onAuthStateChange((ev, session) => { setUser(session?.user || null); if (ev === 'PASSWORD_RECOVERY' || (session && recoveryLink)) { recoveryLink = false; setTimeout(() => bus.emit('recovery'), 400); } });
+  sb.auth.onAuthStateChange((ev, session) => {
+    setUser(session?.user || null);
+    if (ev === 'PASSWORD_RECOVERY' || (session && recoveryLink)) { recoveryLink = false; setTimeout(() => bus.emit('recovery'), 400); }
+    if (ev === 'SIGNED_OUT' && !leaving) setTimeout(() => toast('Your sign-in expired on this phone. Your data is safe here — sign in again (More → Account) to keep syncing.', 9000), 500);
+  });
+  // Coming back to the app or back online: make sure the token is fresh (the client retries by itself when a refresh fails for lack of network)
+  const refresh = () => { if (document.visibilityState === 'visible') sb.auth.getSession().catch(() => {}); };
+  document.addEventListener('visibilitychange', refresh);
+  window.addEventListener('online', refresh);
+  window.addEventListener('focus', refresh);
+  setInterval(refresh, 20 * 60000);
 }
 function setUser(u) {
   const changed = (S.user?.id || null) !== (u?.id || null);
@@ -117,7 +132,8 @@ export async function verifySms(phone, token) {
   if (error) throw new Error(/expired/i.test(error.message) ? 'That code expired. Text me a new one.' : /invalid|incorrect/i.test(error.message) ? 'That code didn\'t match. Check it and try again.' : phoneErr(error));
 }
 export async function signOut() {
-  await sb.auth.signOut();
+  leaving = true;
+  try { await sb.auth.signOut(); } finally { leaving = false; }
   S.db.outbox = []; S.db.syncedUser = null; S.db.community = []; S.db.communityAt = 0;
   save();
 }
@@ -349,7 +365,7 @@ export async function loadAgentOutputs() {
 }
 export async function deleteAccount() {
   await agent('delete-account', { confirm: 'DELETE' });
-  await sb.auth.signOut();
+  leaving = true; await sb.auth.signOut(); leaving = false;
   localStorage.clear();
   S.db = normalize({}); save();
 }
