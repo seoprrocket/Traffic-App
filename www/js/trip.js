@@ -8,6 +8,7 @@ import { locWidget, geoFail, busy, confirmDel, go } from './ui.js';
 import { analyzeRoute, drawRoute, hotspots } from './pages-main.js';
 import { apiStatus, api, creds, pushTrip, unpushTrip, pushState } from './netlify.js';
 import { startNav, navOn } from './nav.js';
+import { askSheet } from './ask.js';
 
 const MIN = 60000;
 const clock = (t) => new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -29,18 +30,18 @@ export const googleNav = (dest) => `https://www.google.com/maps/dir/?api=1&desti
 
 // ---------------------------------------------------------------- planning
 /** Traffic-aware plan from the Netlify function, or a typical-time estimate from OSRM. */
-export async function planDrive({ start, end, arriveBy = null, buffer = 5 }) {
+export async function planDrive({ start, end, arriveBy = null, buffer = 5, departAt = null }) {
   const routeP = analyzeRoute(start, end);
   let p = null;
   try {
     const st = await apiStatus();
-    if (st.ok) p = await api('traffic', { start, end, arriveBy, buffer });
+    if (st.ok) p = await api('traffic', { start, end, arriveBy, buffer, departAt });
   } catch { /* fall back below */ }
   const route = await routeP;
   if (!p) {
     const secs = Math.round((route.secs || route.meters / 13) * 1.2);
     const leave = arriveBy ? Math.floor((arriveBy - buffer * MIN - secs * 1000) / MIN) * MIN : null;
-    p = { traffic: false, source: 'local', meters: route.meters, nowSecs: secs, staticSecs: route.secs, level: null, arriveBy,
+    p = { traffic: false, source: 'local', meters: route.meters, nowSecs: secs, staticSecs: route.secs, level: null, arriveBy, departAt: departAt || null,
       leaveAt: leave ? Math.max(leave, Math.floor(Date.now() / MIN) * MIN) : null, late: !!leave && leave < Date.now(),
       lateMin: leave && leave < Date.now() ? Math.round((Date.now() - leave) / MIN) : 0, samples: [] };
   }
@@ -60,13 +61,16 @@ export function renderDrive() {
         <h2>Plan a Drive</h2>
         <div class="loc" id="dv-end"></div>
         <div class="loc" id="dv-start"></div>
+        <div class="seg small" id="dv-when"><button data-w="now" aria-pressed="true">Leave now</button><button data-w="depart" aria-pressed="false">Depart at</button><button data-w="arrive" aria-pressed="false">Arrive by</button></div>
         <div class="grid2">
-          <label class="f">Arrive by (optional)<input type="datetime-local" id="dv-arrive"></label>
+          <label class="f" id="dv-arrive-f" hidden>Arrive by<input type="datetime-local" id="dv-arrive"></label>
+          <label class="f" id="dv-depart-f" hidden>Depart at<input type="datetime-local" id="dv-depart"></label>
           <label class="f">Extra time<select id="dv-buffer"><option value="0">None</option><option value="5" selected>5 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="30">30 min</option></select></label>
         </div>
         <label class="f">Name (optional)<input type="text" id="dv-name" maxlength="80" placeholder="Dentist, Work, Airport…"></label>
         <div class="btns"><button class="btn primary" id="dv-nav-now">🧭 Navigate</button><button class="btn" id="dv-go">Check traffic &amp; cameras first</button></div>
       </div>
+      <div class="card sec" id="dv-ask"><h2>Ask Radar</h2><p class="note" style="margin:0">One sentence, several conditions: <i>quiet restaurant with parking, open late, vegetarian options, between Silver Spring and Bethesda</i>.</p><div class="btns"><button class="btn" id="dv-ask-btn">💬 Ask Radar</button></div></div>
       <div id="dv-out" class="sec"></div>
       <div class="sec" id="dv-trips"></div>
       <div id="dv-risk"></div>`;
@@ -75,6 +79,13 @@ export function renderDrive() {
     if (E.me) setStartHere(E.me);
     else locateOnce().then(setStartHere).catch(() => {});
     $('#dv-go').onclick = checkDrive;
+    $('#dv-ask-btn').onclick = () => askSheet();
+    $$('#dv-when button').forEach((b) => (b.onclick = () => {
+      $$('#dv-when button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+      $('#dv-arrive-f').hidden = b.dataset.w !== 'arrive'; $('#dv-depart-f').hidden = b.dataset.w !== 'depart';
+      if (b.dataset.w !== 'arrive') $('#dv-arrive').value = ''; if (b.dataset.w !== 'depart') $('#dv-depart').value = '';
+      if (b.dataset.w === 'depart' && !$('#dv-depart').value) { const t = new Date(Date.now() + 3600e3 - new Date().getTimezoneOffset() * 60000); $('#dv-depart').value = t.toISOString().slice(0, 16); }
+    }));
     $('#dv-nav-now').onclick = async (e) => {
       if (form.end.lat == null) { toast('Choose where you\'re going first'); $('#dv-end input')?.focus(); return; }
       busy(e.currentTarget, true, 'Finding route…');
@@ -96,12 +107,15 @@ async function checkDrive() {
   const v = $('#dv-arrive').value;
   const arriveBy = v ? new Date(v).getTime() : null;
   if (arriveBy && arriveBy < Date.now()) { toast('That arrival time has already passed'); return; }
+  const dv = $('#dv-depart').value;
+  const departAt = !arriveBy && dv ? new Date(dv).getTime() : null;
+  if (departAt && departAt < Date.now() - 60000) { toast('That departure time has already passed'); return; }
   const buffer = +$('#dv-buffer').value;
   const name = $('#dv-name').value.trim() || (form.end.label || 'your destination').split(',')[0];
   const b = $('#dv-go'); busy(b, true, 'Checking traffic…');
   const out = $('#dv-out'); out.innerHTML = '<div class="card note"><div class="spinner"></div> Checking the drive…</div>';
   try {
-    const p = await planDrive({ start: { ...form.start }, end: { ...form.end }, arriveBy, buffer });
+    const p = await planDrive({ start: { ...form.start }, end: { ...form.end }, arriveBy, buffer, departAt });
     lastPlan = { ...p, name, buffer, start: { ...form.start }, end: { ...form.end } };
     showPlan(lastPlan);
   } catch (e) {
@@ -113,7 +127,8 @@ const LEVEL = { light: ['Light traffic', 'lo'], moderate: ['Moderate traffic', '
 function chart(p) {
   if (!p.samples || p.samples.length < 2) return '';
   const max = Math.max(...p.samples.map((s) => s.secs));
-  const pick = p.leaveAt ? p.samples.reduce((a, b) => (Math.abs(b.departAt - p.leaveAt) < Math.abs(a.departAt - p.leaveAt) ? b : a)) : p.samples[0];
+  const want = p.leaveAt || p.departAt;
+  const pick = want ? p.samples.reduce((a, b) => (Math.abs(b.departAt - want) < Math.abs(a.departAt - want) ? b : a)) : p.samples[0];
   return `<div class="card"><h3 style="margin-top:0">Drive time by when you leave</h3>
     <div class="cols tall">${p.samples.map((s) => `<div><em>${mins(s.secs)}m</em><i class="${s === pick ? 'pick' : ''}" style="height:${Math.round((s.secs / max) * 100)}%"></i></div>`).join('')}</div>
     <div class="colx">${p.samples.map((s) => `<span>${clock(s.departAt).replace(' ', '')}</span>`).join('')}</div>
@@ -130,7 +145,9 @@ function showPlan(p) {
     ? (p.late
       ? `<div class="bigtime bad">Leave now</div><p style="margin:0">Even leaving now you'd arrive about <b>${p.lateMin} min late</b> for ${clock(p.arriveBy)}.</p>`
       : `<div class="bigtime">Leave by ${clock(p.leaveAt)}</div><p style="margin:0">to arrive by ${dayClock(p.arriveBy)}${p.buffer ? ` with ${p.buffer} min to spare` : ''} · leave ${until(p.leaveAt)}</p>`)
-    : `<div class="bigtime">${mins(p.nowSecs)} min</div><p style="margin:0">if you leave now · arrive about ${clock(Date.now() + p.nowSecs * 1000)}</p>`;
+    : p.departAt
+      ? `<div class="bigtime">${mins(p.nowSecs)} min</div><p style="margin:0">leaving at ${dayClock(p.departAt)} · arrive about ${clock(p.departAt + p.nowSecs * 1000)}${p.traffic ? ' with predicted traffic' : ''}</p>`
+      : `<div class="bigtime">${mins(p.nowSecs)} min</div><p style="margin:0">if you leave now · arrive about ${clock(Date.now() + p.nowSecs * 1000)}</p>`;
   const traffic = p.traffic
     ? `${lv ? `<span class="tag ${lv[1]}">${lv[0]}</span> ` : ''}About ${mins(p.nowSecs)} min with traffic${p.staticSecs && Math.abs(p.staticSecs - p.nowSecs) > 90 ? `, ${mins(p.staticSecs)} min with no traffic` : ''} · ${fmtDist(p.meters)}`
     : `About ${mins(p.nowSecs)} min · ${fmtDist(p.meters)}<br><span class="note">Live traffic isn't connected, so this is the usual drive time plus 20%. ${p.note ? esc(p.note) : 'Step 2 of the setup page adds live traffic.'}</span>`;
@@ -142,7 +159,7 @@ function showPlan(p) {
         <button class="btn" id="dv-start-only">Start without directions</button>
       </div>
       <div class="btns">
-        ${p.arriveBy ? '<button class="btn" id="dv-save">Save trip &amp; remind me</button><button class="btn" id="dv-cal">Add to calendar</button>' : ''}
+        ${p.arriveBy || p.departAt ? '<button class="btn" id="dv-save">Save trip &amp; remind me</button><button class="btn" id="dv-cal">Add to calendar</button>' : ''}
         <button class="btn" id="dv-map">Show on map</button>
         <button class="btn" id="dv-saveroute">Save as route</button>
       </div></div>
@@ -161,8 +178,9 @@ function showPlan(p) {
 
 // ---------------------------------------------------------------- saved trips
 async function saveTrip(p) {
-  const rec = { id: uuid(), name: p.name, start: p.start, end: p.end, arriveBy: p.arriveBy, buffer: p.buffer,
-    leaveAt: p.leaveAt, secs: p.nowSecs, traffic: p.traffic, checkedAt: Date.now(), alerted: false };
+  // a "depart at" plan is saved as arriving at departure + drive time, so the leave-reminder works the same way
+  const rec = { id: uuid(), name: p.name, start: p.start, end: p.end, arriveBy: p.arriveBy || (p.departAt + (p.nowSecs || 1200) * 1000), buffer: p.arriveBy ? p.buffer : 0,
+    leaveAt: p.leaveAt || p.departAt, secs: p.nowSecs, traffic: p.traffic, checkedAt: Date.now(), alerted: false };
   S.db.plans = [...(S.db.plans || []).filter((x) => x.arriveBy > Date.now() - 3600e3), rec];
   save();
   const pushed = await pushTrip(rec);
@@ -232,7 +250,8 @@ export async function tripTick() {
 // ---------------------------------------------------------------- calendar (works with no server at all)
 function calendar(p) {
   const f = (t) => new Date(t).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-  const leave = p.leaveAt || p.arriveBy - (p.nowSecs || 1200) * 1000;
+  const leave = p.leaveAt || p.departAt || p.arriveBy - (p.nowSecs || 1200) * 1000;
+  p = { ...p, arriveBy: p.arriveBy || leave + (p.nowSecs || 1200) * 1000 };
   const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Invictus Traffic Radar//EN', 'BEGIN:VEVENT',
     `UID:${p.id || uuid()}@ticket-radar`, `DTSTAMP:${f(Date.now())}`, `DTSTART:${f(leave)}`, `DTEND:${f(p.arriveBy)}`,
     `SUMMARY:Leave for ${String(p.name).replace(/[,;\\]/g, ' ')}`,

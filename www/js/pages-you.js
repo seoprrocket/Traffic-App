@@ -8,6 +8,7 @@ import { cloudConfigured, usingOverride, sendCode, verifyCode, signOut, syncNow,
 import { summary } from './pages-main.js';
 import { pushState, enablePush, disablePush, testPush, pushTrip } from './netlify.js';
 import { CAR_STYLES, CAR_COLORS, carSvg } from './cars.js';
+import { AVOID, ENGINES } from './nav.js';
 import { refreshMe } from './mapview.js';
 
 const cfg = window.TR_CONFIG || {};
@@ -199,6 +200,14 @@ export function openSettings() {
     <div id="s-push" class="note">Checking…</div>
     <h3 class="sech">More</h3>
     <label class="switch"><input type="checkbox" id="s-off" ${st.officialCams ? 'checked' : ''}><span><b>Official camera lists</b><small>Warn me about the cameras DC, Montgomery County and Prince George's County publish, plus county lists, not just my pins.</small></span></label>
+    <h3>Navigation</h3>
+    <label class="f">Voice guidance<select id="s-nv"><option value="all"${st.navVoice === 'all' || !st.navVoice ? ' selected' : ''}>Directions and alerts</option><option value="alerts"${st.navVoice === 'alerts' ? ' selected' : ''}>Alerts only (cameras, hazards, traffic)</option><option value="mute"${st.navVoice === 'mute' ? ' selected' : ''}>Mute everything while navigating</option></select></label>
+    <div class="f"><span>Avoid on routes</span><div class="chips" style="margin-top:6px">${AVOID.map(([k, lb]) => `<label class="chip"><input type="checkbox" name="s-avoid" value="${k}" ${(st.avoid || []).includes(k) ? 'checked' : ''}> ${lb}</label>`).join('')}</div><small class="hint">Routes come from OpenStreetMap; when nothing avoids all of them, the app tells you which it couldn't skip.</small></div>
+    <div class="grid2">
+      <label class="f">Engine<select id="s-eng">${ENGINES.map(([k, lb]) => `<option value="${k}"${st.engine === k ? ' selected' : ''}>${lb}</option>`).join('')}</select></label>
+      <label class="switch"><input type="checkbox" id="s-eco" ${st.ecoRoutes ? 'checked' : ''}><span><b>Fuel-efficient routes</b><small>Takes a shorter route when it's no more than 15% slower, and shows the fuel or energy estimate.</small></span></label>
+    </div>
+    <h3>Cameras</h3>
     <label class="switch"><input type="checkbox" id="s-log" ${st.logPasses !== false ? 'checked' : ''}><span><b>Log the cameras I drive past</b><small>Builds the "My roads" list with your speed at each camera, so you can see where you'd get a ticket.</small></span></label>
     <label class="switch"><input type="checkbox" id="s-lim" ${st.speedLimits ? 'checked' : ''}><span><b>Show the speed limit for every road</b><small>Looks up posted limits from OpenStreetMap as you drive. Uses a little data.</small></span></label>
     <label class="switch"><input type="checkbox" id="s-hf" ${st.handsFreeAuto ? 'checked' : ''}><span><b>Hands-free screen while driving</b><small>Big speed readout and one-tap report buttons when drive mode starts.</small></span></label>
@@ -213,6 +222,7 @@ export function openSettings() {
       alertType: s.querySelector('#s-at').value, lead: Math.min(15, Math.max(1, +s.querySelector('#s-lead').value || 4)),
       ticketRadius: Math.min(1000, Math.max(50, +s.querySelector('#s-rad').value || 300)), share: s.querySelector('#s-share').checked,
       ai: s.querySelector('#s-ai').checked, sensitivity: s.querySelector('#s-sens').value, officialCams: s.querySelector('#s-off').checked, logPasses: s.querySelector('#s-log').checked,
+      navVoice: s.querySelector('#s-nv').value, navVoiceSet: true, navMuted: s.querySelector('#s-nv').value === 'mute', avoid: [...s.querySelectorAll('input[name="s-avoid"]:checked')].map((x) => x.value), engine: s.querySelector('#s-eng').value, ecoRoutes: s.querySelector('#s-eco').checked,
       speedLimits: s.querySelector('#s-lim').checked, handsFreeAuto: s.querySelector('#s-hf').checked,
       speedOverBy: s.querySelector('#s-over').value === '' ? '' : +s.querySelector('#s-over').value,
       speedMax: Math.max(0, Math.min(120, +s.querySelector('#s-max').value || 0)),

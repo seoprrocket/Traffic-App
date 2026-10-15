@@ -352,3 +352,39 @@ body.nav .mapsearch{display:none}
 .roadsum b{color:var(--fg);font-size:15px}
 .roadsum .bad b{color:var(--danger)} .roadsum .warn b{color:var(--warn)}
 .seg.small{margin:8px 0 6px} .seg.small button{font-size:12px;padding:6px 8px}
+
+/* Compass: true north is up (the map never rotates); the blue arrow turns to your direction of travel */
+.maptools .compass{width:52px;height:auto;padding:3px 2px 4px;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:11px;line-height:1}
+.compass svg{width:44px;height:44px;display:block}
+.cp-ring{fill:var(--surface);stroke:var(--line);stroke-width:2}
+.cp-ticks line{stroke:var(--muted);stroke-width:2;stroke-linecap:round}
+.cp-north{stroke:var(--danger);stroke-width:3;stroke-linecap:round}
+.cp-n{font:700 10px var(--body);fill:var(--danger);text-anchor:middle}
+.cp-dir{transform-origin:32px 32px;transition:transform .4s ease}
+.cp-dir[hidden]{display:none}
+.cp-arrow{fill:var(--you);stroke:#fff;stroke-width:1}
+.cp-hub{fill:var(--fg)}
+.compass b{font:700 11px/1 var(--body);color:var(--fg);font-variant-numeric:tabular-nums;white-space:nowrap}
+.compass.idle b{color:var(--muted)}
+.hf-dir{display:flex;align-items:baseline;gap:8px;font:600 18px/1 var(--body);color:#dfe8ef}
+.hf-dir span{display:inline-block;color:var(--you);font-size:22px;transform:rotate(-90deg);transition:transform .4s ease}
+.hf-dir b{font-size:24px;font-variant-numeric:tabular-nums}
+.hf-dir small{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#9fb0bf}
+
+/* Navigation extras: alternative routes, stops, add-stop sheet */
+.navalts{position:absolute;left:10px;right:10px;top:112px;display:flex;gap:8px;flex-wrap:wrap;max-width:620px;margin:0 auto;pointer-events:auto}
+.navalts button{border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:8px 12px;font:600 13px var(--body);box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.navalts button::before{content:'';display:inline-block;width:14px;height:4px;border-radius:2px;background:#8a94a3;margin-right:6px;vertical-align:middle}
+.stop-pin span{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#f59e0b;color:#111;font:700 13px var(--body);border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips .chip input{margin:0 2px 0 0}
+.chip[aria-pressed="true"]{background:var(--you);border-color:var(--you);color:#fff}
+.sbtn.primary{background:var(--you);color:#fff;border-color:var(--you)}
+.row .acts .sbtn.primary{font-weight:700}
+
+/* Ask Radar results */
+.checks{display:flex;flex-wrap:wrap;gap:4px 8px}
+.ck{font-size:12px;font-weight:600;padding:1px 7px;border-radius:999px;background:var(--surface2);color:var(--muted)}
+.ck.ok{background:color-mix(in srgb,var(--ok) 18%,var(--surface));color:var(--fg)}
+.ck.no{background:color-mix(in srgb,var(--danger) 16%,var(--surface));color:var(--fg)}
+.navbot{gap:6px} .navbtn{min-width:40px;height:40px;font-size:17px} .navbtn.end{padding:0 12px}

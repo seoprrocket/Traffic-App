@@ -7,7 +7,7 @@ const KEY = 'ticketRadar.v1';
 export const DEFAULT_SETTINGS = {
   lead: 5, ticketRadius: 300, alertType: 'voice', share: false, ai: true, sensitivity: 'medium',
   officialCams: true, speedLimits: true, handsFreeAuto: true,
-  carStyle: 'dot', carColor: '#f4f5f7', navMuted: false, parkLayer: false, logPasses: true, speedOverBy: 5, speedMax: 0, roadBumps: true, roadCurves: true, roadLimits: true, roadTolls: true,
+  carStyle: 'dot', carColor: '#f4f5f7', navMuted: false, navVoice: 'all', avoid: [], engine: 'petrol', ecoRoutes: false, parkLayer: false, logPasses: true, speedOverBy: 5, speedMax: 0, roadBumps: true, roadCurves: true, roadLimits: true, roadTolls: true,
 };
 export const DEFAULT_PROFILE = { name: '', homeLabel: '', workLabel: '', avoidRisk: 'warn', emailCoach: true };
 const LISTS = ['tickets', 'cameras', 'reports', 'routes', 'commutes', 'events', 'alerts', 'trips', 'outbox', 'official', 'community', 'hotspots', 'coach', 'predictions', 'disputes', 'plans', 'passes'];
@@ -26,6 +26,8 @@ function seed() {
 export function normalize(d) {
   LISTS.forEach((k) => { if (!Array.isArray(d[k])) d[k] = []; });
   d.settings = { ...DEFAULT_SETTINGS, ...(d.settings || {}) };
+  if (!Array.isArray(d.settings.avoid)) d.settings.avoid = [];
+  if (d.settings.navMuted && !(d.settings || {}).navVoiceSet) { d.settings.navVoice = 'mute'; }
   if (d.settings.voice === false && d.settings.alertType === 'voice') d.settings.alertType = 'sound';
   delete d.settings.voice;
   d.profile = { ...DEFAULT_PROFILE, ...(d.profile || {}) };

@@ -10,7 +10,8 @@ import { rcat } from './mapview.js';
 import { HAZARDS, sayType } from './reports.js';
 import { checkParkingAt } from './parking.js';
 import { spokenRisk } from './parkrisk.js';
-import { startNav, endNav } from './nav.js';
+import { startNav, endNav, navOn, setVoice, stopSheet, recenter, switchAlt, STOP_KINDS } from './nav.js';
+import { askSpoken, askSheet } from './ask.js';
 
 // ---------------------------------------------------------------- understanding simple commands on the phone
 const REPORT_WORDS = [
@@ -31,6 +32,13 @@ function understand(raw) {
   const t = raw.toLowerCase().trim();
   if (/^(undo|cancel|never ?mind)/.test(t)) return { action: 'undo' };
   if (/\b(stop|end|cancel) (navigation|navigating|directions|the route)\b/.test(t)) return { action: 'end_nav' };
+  if (/\balerts? only\b/.test(t)) return { action: 'voice', mode: 'alerts' };
+  if (/\b(unmute|voice (back )?on|turn (the )?(voice|sound) (back )?on|talk to me)\b/.test(t)) return { action: 'voice', mode: 'all' };
+  if (/\b(mute|silence|be quiet|quiet mode|stop talking)\b/.test(t)) return { action: 'voice', mode: 'mute' };
+  if (/\b(re-?cent(er|re)( the map)?|center (the )?map|follow me)\b/.test(t)) return { action: 'recenter' };
+  if (/\b(alternative|alternate|other|different|another) route\b|\bavoid (this|that) (road|route|highway)\b/.test(t)) return { action: 'alt' };
+  const stop = /\b(?:add|make|plan) (?:a )?stop (?:for|at)\s+(.{2,60})|\bstop (?:for|at)\s+(gas|fuel|coffee|an atm|atm|food|a restroom|a bathroom|charging|parking)\b|\bi need (?:some |a |an )?(gas|fuel|coffee|atm|cash|food|restroom|bathroom|charging|charge|parking|pharmacy)\b/.exec(t);
+  if (stop) return { action: 'stop', q: (stop[1] || stop[2] || stop[3]).replace(/[.?!]+$/, '') };
   const go2 = /\b(?:navigate|take me|drive me|directions|get me|go|head)\s+(?:to|toward|towards)\s+(.{3,80})$/.exec(t);
   if (go2) return { action: 'navigate', place: go2[1].replace(/[.?!]+$/, '') };
   if (/(start|begin) (driving|drive|drive mode)|drive mode on/.test(t)) return { action: 'start_drive' };
@@ -39,6 +47,8 @@ function understand(raw) {
   if (/\b(share (my )?(drive|trip|location|eta)|send my eta)\b/.test(t)) return { action: 'share_drive' };
   if (/\b(can i park|ok to park|okay to park|safe to park|good (place|spot) to park|parking tickets? (here|risk)|ticket risk)\b/.test(t)) return { action: 'park_check' };
   if (/\b(find|where can i) park(ing)?\b|\bparking near\b/.test(t)) return { action: 'find_parking' };
+  const ask = /^(?:hey radar,? |radar,? |ask radar,? )?(?:find|look for|search for|i(?:'m| am) looking for|i want|is there|are there|where(?:'s| is| are) (?:the )?(?:nearest|closest)|nearest|closest|show me|any)\s+(.{3,140})$/.exec(t);
+  if (ask) return { action: 'ask', q: ask[1].replace(/[.?!]+$/, '') };
   if (/\b(when will i (get there|arrive)|what'?s my eta|how long (until|till) i)\b/.test(t)) return { speech: etaSummary() };
   if (/(what'?s|anything|any cameras?|anything) (ahead|coming up|up ahead)|next camera/.test(t)) return { speech: aheadSummary() };
   if (/\b(report|there'?s|i see|spotted|seeing)\b/.test(t)) {
@@ -89,6 +99,23 @@ export async function voiceCommand() {
     if (r.action === 'share_drive') { bus.emit('share-drive'); return; }
     if (r.action === 'find_parking') { bus.emit('go', 'parking'); return; }
     if (r.action === 'end_nav') { endNav(); speak('Navigation ended.'); return; }
+    if (r.action === 'voice') { setVoice(r.mode); if (r.mode === 'mute') toast('Muted. Say "unmute" or tap 🔇 to turn voice back on.'); return; }
+    if (r.action === 'recenter') { recenter(); go('map'); speak('Centered on you.'); return; }
+    if (r.action === 'alt') { if (!navOn()) speak('Start navigation first.'); else if (!switchAlt(0)) speak('There\'s no alternative route right now.'); return; }
+    if (r.action === 'stop') {
+      if (!navOn()) { speak('Start navigation first, then I can add stops along the way.'); return; }
+      const k = STOP_KINDS.find(([key, , lb]) => new RegExp(`\\b(${key}|${lb.split(' ')[0]})`, 'i').test(r.q)) || (/gas|fuel/.test(r.q) ? STOP_KINDS[0] : /cash|bank/.test(r.q) ? STOP_KINDS[2] : /bathroom|restroom|toilet/.test(r.q) ? STOP_KINDS.find(([key]) => key === 'restroom') : /charg/.test(r.q) ? STOP_KINDS.find(([key]) => key === 'charge') : /eat|food|lunch|dinner|burger/.test(r.q) ? STOP_KINDS.find(([key]) => key === 'food') : null);
+      speak(k ? `Looking for ${k[2].toLowerCase()} along your route.` : `Looking for ${r.q} along your route.`);
+      stopSheet(k ? k[0] : undefined);
+      if (!k) setTimeout(() => { const i = $('#st-q'); if (i) { i.value = r.q; i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })); } }, 300);
+      return;
+    }
+    if (r.action === 'ask') {
+      speak('Checking the map.');
+      askSheet(r.q);
+      try { speak(await askSpoken(r.q)); } catch (e) { speak(e.message || 'I couldn\'t check that.'); }
+      return;
+    }
     if (r.action === 'navigate') {
       speak(`Finding ${r.place}.`);
       const near = E.me || {};

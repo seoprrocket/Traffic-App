@@ -5,6 +5,7 @@ import { map, layers, icons, markerFor } from './mapview.js';
 import { E } from './engine.js';
 import { go, ticketForm } from './ui.js';
 import { startNav } from './nav.js';
+import { askSheet } from './ask.js';
 
 const GEO = 'https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=us&viewbox=-79.50,39.75,-75.00,37.85&bounded=1&q=';
 const ICON = { Speed: '📷', 'Red light': '🚦', 'Stop sign': '🛑', Truck: '🚚', 'School zone': '🏫', 'Bus lane': '🚌' };
@@ -39,7 +40,9 @@ function row(it, i) {
 let shown = [];
 function paint(list, geoRow, note) {
   shown = list;
-  res.innerHTML = list.map(row).join('') + (geoRow ? `<button type="button" class="ms-row ms-geo" data-geo="1"><span class="ms-ic">🔎</span><span class="ms-main"><b>Search the map for “${esc(geoRow)}”</b><small>Streets, addresses, intersections and places</small></span></button>` : '') + (note ? `<div class="ms-note">${note}</div>` : '');
+  const q = inp.value.trim();
+  const askRow = q.length >= 3 ? `<button type="button" class="ms-row ms-ask" data-ask="1"><span class="ms-ic">💬</span><span class="ms-main"><b>Ask Radar${/\s/.test(q) ? `: “${esc(q)}”` : ''}</b><small>Describe a place with conditions — “coffee with wifi open now near Bethesda”</small></span></button>` : '';
+  res.innerHTML = list.map(row).join('') + (geoRow ? `<button type="button" class="ms-row ms-geo" data-geo="1"><span class="ms-ic">🔎</span><span class="ms-main"><b>Search the map for “${esc(geoRow)}”</b><small>Streets, addresses, intersections and places</small></span></button>` : '') + askRow + (note ? `<div class="ms-note">${note}</div>` : '');
   res.hidden = !res.innerHTML;
 }
 function onType() {
@@ -106,6 +109,7 @@ export function setupMapSearch() {
   clearBtn.onclick = () => { inp.value = ''; clearBtn.hidden = true; paint([], '', ''); layers.temp.clearLayers(); inp.focus(); };
   res.addEventListener('click', (e) => {
     const g = e.target.closest('[data-geo]'); if (g) { geocode(inp.value.trim()); return; }
+    const a = e.target.closest('[data-ask]'); if (a) { const q = inp.value.trim(); close(); askSheet(/\s/.test(q) ? q : ''); return; }
     const r = e.target.closest('[data-i]'); if (!r) return;
     const it = shown[+r.dataset.i]; if (!it) return;
     if (it.kind === 'place') showPlace(it); else pick(it);

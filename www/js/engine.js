@@ -1,13 +1,13 @@
 // Drive mode: follows your GPS and fires the warnings.
 import { S, sens, allCameras, activeReports, logAlert, logEvent, logTrip , cameraTickets, logPass, updatePass } from './store.js';
-import { $, esc, dist, bearing, angleDiff, fmtDist, sayDist, streetKey, ago, bus, toast } from './util.js';
+import { $, esc, dist, bearing, angleDiff, fmtDist, sayDist, streetKey, ago, bus, toast, headingSpoken, sameStreet } from './util.js';
 import { sayType } from './reports.js';
 import { watchLocation, notify, beep, speak, vibrate, keepAwake, askNotifyPermission, unlockAudio, isNative } from './native.js';
 import * as roads from './roads.js';
 
-export const E = { driving: false, me: null, heading: null, speed: 0, osmLimit: null, road: null, limitHere: null, next: null };
+export const E = { driving: false, me: null, heading: null, speed: 0, osmLimit: null, road: null, limitHere: null, next: null, onRoute: null, silent: false };
 const prevD = {}, fired = {}, inside = {};
-let stopWatch = null, last = null, ref = null, trip = null;
+let stopWatch = null, last = null, ref = null, headRef = null, trip = null;
 
 // ---------------------------------------------------------------- alerts
 let alertTimer = null;
@@ -23,7 +23,7 @@ export function raise(kind, title, sub, voice, mode, opts = {}) {
   clearTimeout(alertTimer); alertTimer = setTimeout(() => el.remove(), 15000);
   vibrate(kind === 'info' ? 120 : [250, 120, 250, 120, 400]);
   if (mode === 'sound' || mode === 'voice') beep();
-  if (mode === 'voice') setTimeout(() => speak(voice || `${title}. ${sub}`), 650);
+  if (mode === 'voice' && !E.silent) setTimeout(() => speak(voice || `${title}. ${sub}`), 650);   // E.silent: navigation set to full mute
   if (isNative || document.hidden) notify(title, sub);
   if (opts.log === false) return;
   logAlert(kind, title, sub);
@@ -65,9 +65,9 @@ export async function startDrive() {
   if (E.driving) return;
   unlockAudio();
   askNotifyPermission();                                        // ask, but never wait on the answer before watching GPS
-  E.driving = true; last = null; ref = null; trip = null; E.speed = 0;
+  E.driving = true; last = null; ref = null; headRef = null; trip = null; E.speed = 0;
   keepAwake.wanted = true; keepAwake(true);
-  if (S.db.settings.alertType === 'voice') speak(`Drive mode on. I'll warn you ${S.db.settings.lead} minutes before each camera.`);
+  if (S.db.settings.alertType === 'voice') speak(`Drive mode on. I'll warn you ${S.db.settings.lead} minutes before each camera in your direction.`);
   let warned = false;
   stopWatch = await watchLocation(onFix, (e) => {
     if (e.code === 1) { toast(e.message || 'Location is blocked. Allow it in your settings.'); stopDrive(); return; }
@@ -102,8 +102,11 @@ function onFix(p) {
   }
   v = Math.min(Math.max(0, v || 0), 70);                       // 70 m/s ≈ 155 mph: anything above is a GPS jump
   p.speed = last ? 0.6 * v + 0.4 * E.speed : v;                // light smoothing
-  if (p.heading != null && p.heading >= 0 && p.speed > 2) E.heading = p.heading;
-  else if (last && dist(last, p) > 12) E.heading = bearing(last, p);
+  // Direction of travel (true north): the GPS course when the chip gives one, otherwise the bearing from the last point 12 m back —
+  // kept as a separate reference so slow driving still turns the compass
+  if (p.heading != null && p.heading >= 0 && p.speed > 2) { E.heading = p.heading; headRef = p; }
+  else if (!headRef) headRef = p;
+  else if (dist(headRef, p) > 12) { E.heading = bearing(headRef, p); headRef = p; }
   p.heading = E.heading;
 
   if (!trip) trip = { start: { lat: p.lat, lng: p.lng }, startedAt: Date.now(), meters: 0, maxMph: 0, alerts: 0 };
@@ -152,26 +155,34 @@ function check(cur) {
     if (d > 12000) { delete prevD[c.id]; continue; }
     const p = prevD[c.id]; prevD[c.id] = d;
     const approaching = p == null || d < p - 3 || d < 150;
-    // One-direction cameras wait until we know which way you're going (the first GPS fix has no direction)
+    // Only cameras in my direction:
+    //  • it enforces the way I'm going (its direction within 50° of mine); one-direction cameras wait until the GPS knows my direction
+    //  • it's ahead of me — within 45° of my heading for the early warnings (70° once I'm close)
+    //  • when navigating, it's on my route ahead of me; otherwise, if it's clearly on a different street, only the "right ahead" call-out
     const rightWay = c.heading == null ? true : E.heading == null ? false : angleDiff(E.heading, c.heading) <= 50;
     const ahead = isAhead(cur, c, d);
-    const live = approaching && rightWay && ahead;
+    const route = E.onRoute ? E.onRoute(c) : undefined;
+    // no route: in front of me (≤45° off my heading) and no more than ~150 m to the side of my line of travel, and not on a street I'm clearly not driving
+    const off = E.heading == null ? 999 : angleDiff(bearing(cur, c), E.heading);
+    const myWay = route ? route.on && route.ahead > 0 : E.heading != null && off <= 45 && d * Math.sin((off * Math.PI) / 180) <= 150 && sameStreet(c.name, E.road) !== false;
+    const live = approaching && rightWay && ahead && route?.on !== false;
     geofence('c' + c.id, c.name, 'Camera', d <= 250 && rightWay, mph, c.limit);
     trackPass(c, d <= 250 && rightWay, mph);
     if (!live) continue;
-    candidates.push({ kind: 'camera', label: `${c.kind} camera`, name: c.name, d, limit: c.limit });
+    if (myWay || d <= 250) candidates.push({ kind: 'camera', label: `${c.kind} camera`, name: c.name, d, limit: c.limit });
     if (d < 800 && c.limit && d < limitD) { limitD = d; limitNear = c.limit; }
     const eta = d / v;
-    if (eta <= lead && d > 250 && !fired['far' + c.id]) {
+    const dir = c.heading != null ? headingSpoken(c.heading) : '';
+    if (eta <= lead && d > 250 && myWay && !fired['far' + c.id]) {
       fired['far' + c.id] = 1;
       const mins = Math.max(1, Math.round(eta / 60));
       const got = cameraTickets(c).length;
       raise('camera', got ? `⚠️ Camera that got you · ~${mins} min` : `Camera in ~${mins} min`, `${c.name} · ${fmtDist(d)} ahead${c.limit ? ' · limit ' + c.limit + ' mph' : ''}${got ? ` · ticketed you ${got === 1 ? 'once' : got + ' times'}` : ''}`,
-        `Heads up. ${c.kind} camera in about ${mins} minute${mins > 1 ? 's' : ''}${c.limit ? '. Speed limit ' + c.limit : ''}.${got ? ' This one has ticketed you before.' : ''}`);
+        `Heads up. ${c.kind} camera${dir ? ', ' + dir + ',' : ''} in about ${mins} minute${mins > 1 ? 's' : ''}${c.limit ? '. Speed limit ' + c.limit : ''}.${got ? ' This one has ticketed you before.' : ''}`);
       if (eta <= 60) fired['one' + c.id] = 1;                 // already inside the last minute: one call-out is enough
     }
     // Second call-out: one minute out ("One minute to camera"), when the first warning was further out than that
-    if (lead > 75 && eta <= 60 && d > 250 && fired['far' + c.id] && !fired['one' + c.id]) {
+    if (lead > 75 && eta <= 60 && d > 250 && myWay && fired['far' + c.id] && !fired['one' + c.id]) {
       fired['one' + c.id] = 1;
       raise('camera', 'Camera in 1 min', `${c.name} · ${fmtDist(d)} ahead${c.limit ? ' · limit ' + c.limit + ' mph' : ''}`,
         `One minute to ${String(c.kind).toLowerCase()} camera.${c.limit ? ' Limit ' + c.limit + '.' : ''}`);

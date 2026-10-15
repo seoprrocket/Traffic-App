@@ -46,6 +46,32 @@ export function parseHeading(text) {
   return w ? Object.fromEntries(DIRS)[w[1][0]] : null;
 }
 export const headingName = (h) => (h == null ? 'any direction' : DIRS.reduce((best, d) => (angleDiff(d[1], h) < angleDiff(best[1], h) ? d : best))[0] + '-bound');
+const SPOKEN = { N: 'northbound', NE: 'northeast-bound', E: 'eastbound', SE: 'southeast-bound', S: 'southbound', SW: 'southwest-bound', W: 'westbound', NW: 'northwest-bound' };
+/** Nearest compass point: "NE". */
+export const compassPoint = (h) => (h == null ? null : DIRS.reduce((best, d) => (angleDiff(d[1], h) < angleDiff(best[1], h) ? d : best))[0]);
+/** "northbound" — how a direction is read aloud. */
+export const headingSpoken = (h) => (h == null ? '' : SPOKEN[compassPoint(h)]);
+
+// ---- Street names: is this camera on the road I'm driving? -------------------
+const ABBR = { AVE: 'AVENUE', AV: 'AVENUE', AVN: 'AVENUE', ST: 'STREET', STR: 'STREET', RD: 'ROAD', BLVD: 'BOULEVARD', BLV: 'BOULEVARD', PKWY: 'PARKWAY', PKY: 'PARKWAY', PWY: 'PARKWAY', HWY: 'HIGHWAY', DR: 'DRIVE', LN: 'LANE', PL: 'PLACE', CT: 'COURT', TER: 'TERRACE', TERR: 'TERRACE', CIR: 'CIRCLE', EXPY: 'EXPRESSWAY', EXPWY: 'EXPRESSWAY', FWY: 'FREEWAY', TPKE: 'TURNPIKE', RTE: 'ROUTE', RT: 'ROUTE', MT: 'MOUNT', FT: 'FORT', MTN: 'MOUNTAIN', SQ: 'SQUARE', TRL: 'TRAIL', WY: 'WAY' };
+const TYPES = new Set(['AVENUE', 'STREET', 'ROAD', 'BOULEVARD', 'PARKWAY', 'HIGHWAY', 'DRIVE', 'LANE', 'PLACE', 'COURT', 'TERRACE', 'CIRCLE', 'EXPRESSWAY', 'FREEWAY', 'TURNPIKE', 'PIKE', 'ROUTE', 'SQUARE', 'TRAIL', 'WAY', 'BRIDGE']);
+const NOISE = new Set(['NW', 'NE', 'SW', 'SE', 'N', 'S', 'E', 'W', 'NB', 'SB', 'EB', 'WB', 'NORTHBOUND', 'SOUTHBOUND', 'EASTBOUND', 'WESTBOUND', 'BOUND', 'NORTHWEST', 'NORTHEAST', 'SOUTHWEST', 'SOUTHEAST', 'NORTH', 'SOUTH', 'EAST', 'WEST', 'BLK', 'BLOCK', 'THE', 'OF', 'AT', 'IN', 'ON', 'NEAR', 'AND', 'INTERSECTION', 'CAMERA', 'SPEED', 'ZONE', 'SCHOOL']);
+/** Tokens that name the street a camera (or road) is on; the part before "@", "&", "between"… */
+export function streetTokens(s) {
+  if (!s) return [];
+  const first = String(s).toUpperCase().replace(/\b(NE|NW|SE|SW|N|S|E|W)\s*\/\s*B\b/g, ' ').split(/[@&,;\/()]|\bBTW\b|\bBETWEEN\b|\bFROM\b|\bTO\b|\bAND\b|\bAT\b|\bNEAR\b|\bBEFORE\b|\bAFTER\b/)[0];
+  return first.replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter((w) => w && !NOISE.has(w) && !/^\d+$/.test(w)).map((w) => ABBR[w] || w);
+}
+/** true = same street, false = clearly a different street, null = can't tell (one side unknown). */
+export function sameStreet(a, b) {
+  const x = streetTokens(a), y = streetTokens(b);
+  if (!x.length || !y.length) return null;
+  const nx = x.filter((w) => !TYPES.has(w)), ny = y.filter((w) => !TYPES.has(w));
+  if (!nx.length || !ny.length) return null;
+  if (nx[0] !== ny[0]) return false;
+  const tx = x.find((w) => TYPES.has(w)), ty = y.find((w) => TYPES.has(w));
+  return tx && ty && tx !== ty ? false : true;
+}
 
 /** Distance as it should be read aloud: "600 feet", "1.2 miles". */
 export function sayDist(m) {

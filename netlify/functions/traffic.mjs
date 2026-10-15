@@ -10,7 +10,9 @@ export default handle(async (req) => {
   const arriveBy = b.arriveBy ? +b.arriveBy : null;
   if (arriveBy && arriveBy < Date.now() - 60000) throw new HttpError(400, 'That arrival time has already passed.');
   if (arriveBy && arriveBy > Date.now() + 8 * 86400000) throw new HttpError(400, 'Plan drives up to a week ahead.');
-  return json(await plan({ start, end, arriveBy, buffer: b.buffer }));
+  const departAt = !arriveBy && b.departAt ? +b.departAt : null;
+  if (departAt && departAt > Date.now() + 8 * 86400000) throw new HttpError(400, 'Plan drives up to a week ahead.');
+  return json(await plan({ start, end, arriveBy, buffer: b.buffer, departAt: departAt && departAt > Date.now() ? departAt : null }));
 });
 
 export const config = { path: '/api/traffic' };

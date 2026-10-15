@@ -70,19 +70,23 @@ export async function plan({ start, end, arriveBy = null, buffer = 5, quick = fa
     const secs = Math.round(d.secs * 1.2);                    // typical time + 20% for traffic you can't see
     const leaveAt = arriveBy ? floorMin(arriveBy - buf - secs * 1000) : null;
     return { traffic: false, source: 'osrm', meters: d.meters, nowSecs: secs, staticSecs: d.staticSecs, level: null,
-      arriveBy, leaveAt: leaveAt && Math.max(leaveAt, floorMin(now)), late: !!leaveAt && leaveAt < now,
+      arriveBy, departAt: departAt || null, leaveAt: leaveAt && Math.max(leaveAt, floorMin(now)), late: !!leaveAt && leaveAt < now,
       lateMin: leaveAt && leaveAt < now ? Math.round((now - leaveAt) / MIN) : 0, samples: [], note };
   }
 
   const first = departAt && departAt > now + MIN ? departAt : now;
   const d0 = await google(start, end, first);
   const out = { traffic: true, source: 'google', meters: d0.meters, nowSecs: d0.secs, staticSecs: d0.staticSecs,
-    level: level(d0.secs, d0.staticSecs), arriveBy, leaveAt: null, late: false, lateMin: 0, samples: [{ departAt: first, secs: d0.secs }], note };
+    level: level(d0.secs, d0.staticSecs), arriveBy, departAt: first !== now ? first : null, leaveAt: null, late: false, lateMin: 0, samples: [{ departAt: first, secs: d0.secs }], note };
 
   if (!arriveBy) {
-    if (!quick) for (const m of [30, 60, 90, 120]) {
-      try { const d = await google(start, end, now + m * MIN); out.samples.push({ departAt: now + m * MIN, secs: d.secs }); } catch { /* skip */ }
+    // "Depart at": sample around that time so the chart shows whether a little earlier or later is faster
+    const offsets = first !== now ? [-30, -15, 15, 30] : [30, 60, 90, 120];
+    if (!quick) for (const m of offsets) {
+      const t = first + m * MIN; if (t < now + MIN) continue;
+      try { const d = await google(start, end, t); out.samples.push({ departAt: t, secs: d.secs }); } catch { /* skip */ }
     }
+    out.samples.sort((a, b) => a.departAt - b.departAt);
     return out;
   }
 

@@ -1,6 +1,6 @@
 // Boot, routing and wiring between modules.
 import { S, save, upsertLocal , allCameras } from './store.js';
-import { $, $$, bus, debounce, toast, today, uuid } from './util.js';
+import { $, $$, bus, debounce, toast, today, uuid, compassPoint } from './util.js';
 import { map, drawMarkers, placeMe, fitAll } from './mapview.js';
 import { E, startDrive, stopDrive, overBy } from './engine.js';
 import { locateOnce, unlockAudio, isNative } from './native.js';
@@ -137,8 +137,18 @@ bus.on('fix', (p) => {
   $('#spdVal').textContent = mph;
   $('#limSign').hidden = !E.limitHere; $('#limVal').textContent = E.limitHere || '';
   $('#spdSign').classList.toggle('over', !!E.limitHere && mph > E.limitHere + (overBy() ?? 1));
+  paintCompass();
   paintHandsFree();
 });
+// Compass: the map is always north-up, so true north is the fixed red needle; the blue arrow is the GPS course (relative to true north)
+function paintCompass() {
+  const h = E.heading, moving = E.driving && E.speed > 1;
+  const txt = h == null ? '—' : `${compassPoint(h)} ${Math.round(h)}°`;
+  const cp = $('#compass'); if (cp) { $('#cp-txt').textContent = txt; cp.classList.toggle('idle', !moving); const g = $('#cp-dir'); g.hidden = h == null; g.style.transform = `rotate(${h || 0}deg)`; }
+  const hd = $('#hf-dir'); if (hd) { hd.textContent = txt; $('#hf-dir-arrow').style.transform = `rotate(${(h || 0) - 90}deg)`; }
+}
+bus.on('drive', paintCompass);
+$('#compass').onclick = () => toast(E.heading == null ? 'True north is up on the map. The blue arrow shows the way you\'re travelling once you\'re moving.' : `You're travelling ${compassPoint(E.heading)} (${Math.round(E.heading)}° from true north). North is up on the map.`, 3500);
 
 // ---------------------------------------------------------------- boot
 (async function boot() {
