@@ -12,6 +12,8 @@ import { checkParkingAt } from './parking.js';
 import { spokenRisk } from './parkrisk.js';
 import { startNav, endNav, navOn, setVoice, stopSheet, recenter, switchAlt, STOP_KINDS } from './nav.js';
 import { askSpoken, askSheet } from './ask.js';
+import { findSaved, goHome, savePlaceSheet } from './lists.js';
+import { shareDrive, reminderSheet, shareLiveLocation } from './trip.js';
 
 // ---------------------------------------------------------------- understanding simple commands on the phone
 const REPORT_WORDS = [
@@ -32,6 +34,13 @@ function understand(raw) {
   const t = raw.toLowerCase().trim();
   if (/^(undo|cancel|never ?mind)/.test(t)) return { action: 'undo' };
   if (/\b(stop|end|cancel) (navigation|navigating|directions|the route)\b/.test(t)) return { action: 'end_nav' };
+  if (/\b(take me|go|navigate|drive me|head)\s+(home|to my house|to my place)\b/.test(t)) return { action: 'home', which: 'home' };
+  if (/\b(take me|go|navigate|drive me|head)\s+to (work|the office|my office|my job)\b/.test(t)) return { action: 'home', which: 'work' };
+  if (/\b(save|bookmark|remember) (this|my) (place|spot|location|here)\b|\bsave (here|this)\b/.test(t)) return { action: 'save_here' };
+  if (/\b(share|send) my (live |real.?time |current )?location\b/.test(t)) return { action: 'share_location' };
+  const rem = /\bremind me to leave\b(?:\s+(?:at|by)\s+(.{2,30}))?/.exec(t);
+  if (rem) return { action: 'remind', when: rem[1] || '' };
+  if (/\b(open|show) (my )?(saved|favorites|favourites|lists)\b/.test(t)) return { action: 'open_saved' };
   if (/\balerts? only\b/.test(t)) return { action: 'voice', mode: 'alerts' };
   if (/\b(unmute|voice (back )?on|turn (the )?(voice|sound) (back )?on|talk to me)\b/.test(t)) return { action: 'voice', mode: 'all' };
   if (/\b(mute|silence|be quiet|quiet mode|stop talking)\b/.test(t)) return { action: 'voice', mode: 'mute' };
@@ -84,60 +93,74 @@ export async function voiceCommand() {
   try {
     const said = await listen();
     if (!said) { speak('I didn\'t catch that.'); return; }
+    await runSpoken(said, true);
+  } catch (e) { toast(e.message || 'Voice failed'); }
+  finally { listening = false; document.body.classList.remove('listening'); }
+}
+/** Act on something the driver said (from the Voice button, or the map's mic). Returns true when it was a command. */
+export async function runSpoken(said, speakFallback = false) {
+  try {
     let r = understand(said);
     if (!r && S.cloud) {
       try {
         r = await agent('voice-assist', { transcript: said, lat: E.me?.lat, lng: E.me?.lng, heading: E.heading, speed_mph: E.speed * 2.23694, speed_limit: E.limitHere });
       } catch (e) { r = { speech: e.message }; }
     }
-    if (!r) r = { speech: 'I can report police, hazards or cameras, tell you what\'s ahead, or the speed limit.' };
-    if (r.ask) { speak(r.ask); return; }
-    if (r.action === 'undo') { if (lastReportId) { undoReport(lastReportId); lastReportId = null; speak('Removed your last report.'); } else speak('Nothing to undo.'); return; }
-    if (r.action === 'start_drive') { await startDrive(); return; }
-    if (r.action === 'stop_drive') { stopDrive(); speak('Drive mode off.'); return; }
-    if (r.action === 'report') { await doReport(r.report_type || 'Other', r.report_note); return; }
-    if (r.action === 'share_drive') { bus.emit('share-drive'); return; }
-    if (r.action === 'find_parking') { bus.emit('go', 'parking'); return; }
-    if (r.action === 'end_nav') { endNav(); speak('Navigation ended.'); return; }
-    if (r.action === 'voice') { setVoice(r.mode); if (r.mode === 'mute') toast('Muted. Say "unmute" or tap 🔇 to turn voice back on.'); return; }
-    if (r.action === 'recenter') { recenter(); go('map'); speak('Centered on you.'); return; }
-    if (r.action === 'alt') { if (!navOn()) speak('Start navigation first.'); else if (!switchAlt(0)) speak('There\'s no alternative route right now.'); return; }
+    if (!r) { if (speakFallback) speak('I can navigate, find places, add stops, report hazards, or tell you what\'s ahead.'); return false; }
+    if (r.ask) { speak(r.ask); return true; }
+    if (r.action === 'home') { await goHome(r.which); return true; }
+    if (r.action === 'open_saved') { go('saved'); return true; }
+    if (r.action === 'save_here') { if (!E.me) { speak('I need your location first.'); return true; } speak('Saving this spot.'); savePlaceSheet({ name: E.road ? `Near ${E.road}` : 'My location', lat: E.me.lat, lng: E.me.lng }); return true; }
+    if (r.action === 'share_location') { await shareLiveLocation(); return true; }
+    if (r.action === 'remind') { reminderSheet({ whenText: r.when }); return true; }
+    if (r.action === 'undo') { if (lastReportId) { undoReport(lastReportId); lastReportId = null; speak('Removed your last report.'); } else speak('Nothing to undo.'); return true; }
+    if (r.action === 'start_drive') { await startDrive(); return true; }
+    if (r.action === 'stop_drive') { stopDrive(); speak('Drive mode off.'); return true; }
+    if (r.action === 'report') { await doReport(r.report_type || 'Other', r.report_note); return true; }
+    if (r.action === 'share_drive') { bus.emit('share-drive'); return true; }
+    if (r.action === 'find_parking') { bus.emit('go', 'parking'); return true; }
+    if (r.action === 'end_nav') { endNav(); speak('Navigation ended.'); return true; }
+    if (r.action === 'voice') { setVoice(r.mode); if (r.mode === 'mute') toast('Muted. Say "unmute" or tap 🔇 to turn voice back on.'); return true; }
+    if (r.action === 'recenter') { recenter(); go('map'); speak('Centered on you.'); return true; }
+    if (r.action === 'alt') { if (!navOn()) speak('Start navigation first.'); else if (!switchAlt(0)) speak('There\'s no alternative route right now.'); return true; }
     if (r.action === 'stop') {
-      if (!navOn()) { speak('Start navigation first, then I can add stops along the way.'); return; }
+      if (!navOn()) { speak('Start navigation first, then I can add stops along the way.'); return true; }
       const k = STOP_KINDS.find(([key, , lb]) => new RegExp(`\\b(${key}|${lb.split(' ')[0]})`, 'i').test(r.q)) || (/gas|fuel/.test(r.q) ? STOP_KINDS[0] : /cash|bank/.test(r.q) ? STOP_KINDS[2] : /bathroom|restroom|toilet/.test(r.q) ? STOP_KINDS.find(([key]) => key === 'restroom') : /charg/.test(r.q) ? STOP_KINDS.find(([key]) => key === 'charge') : /eat|food|lunch|dinner|burger/.test(r.q) ? STOP_KINDS.find(([key]) => key === 'food') : null);
       speak(k ? `Looking for ${k[2].toLowerCase()} along your route.` : `Looking for ${r.q} along your route.`);
       stopSheet(k ? k[0] : undefined);
       if (!k) setTimeout(() => { const i = $('#st-q'); if (i) { i.value = r.q; i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })); } }, 300);
-      return;
+      return true;
     }
     if (r.action === 'ask') {
       speak('Checking the map.');
       askSheet(r.q);
       try { speak(await askSpoken(r.q)); } catch (e) { speak(e.message || 'I couldn\'t check that.'); }
-      return;
+      return true;
     }
     if (r.action === 'navigate') {
+      const sv = findSaved(r.place);
+      if (sv) { speak(`Navigating to ${sv.name}.`); await startNav({ dest: { lat: sv.lat, lng: sv.lng, label: sv.name }, name: sv.name }); return true; }
       speak(`Finding ${r.place}.`);
       const near = E.me || {};
       const q = new URLSearchParams({ format: 'json', limit: '1', countrycodes: 'us', q: r.place, viewbox: '-79.50,39.75,-75.00,37.85', bounded: '1' });
       if (near.lat) q.set('viewbox', `${near.lng - 0.6},${near.lat + 0.45},${near.lng + 0.6},${near.lat - 0.45}`);
       let hit = null;
       try { hit = (await (await fetch('https://nominatim.openstreetmap.org/search?' + q)).json())[0]; } catch { /* offline */ }
-      if (!hit) { speak(`I couldn't find ${r.place}. Try the Drive tab.`); return; }
+      if (!hit) { speak(`I couldn't find ${r.place}. Try the Drive tab.`); return true; }
       const label = hit.display_name;
       await startNav({ dest: { lat: +hit.lat, lng: +hit.lon, label }, name: label.split(',')[0] });
-      return;
+      return true;
     }
     if (r.action === 'park_check') {
-      if (!E.me) { speak('I need your location first. Start drive mode or tap locate.'); return; }
+      if (!E.me) { speak('I need your location first. Start drive mode or tap locate.'); return true; }
       speak('Checking parking tickets here.');
       const res = await checkParkingAt(E.me, 'you');
       speak(res.error ? res.error : spokenRisk(res) || 'There\'s no parking ticket data for this area. Read the signs before you leave the car.');
-      return;
+      return true;
     }
     if (r.speech) speak(r.speech);
-  } catch (e) { toast(e.message || 'Voice failed'); }
-  finally { listening = false; document.body.classList.remove('listening'); }
+    return true;
+  } catch (e) { toast(e.message || 'Voice failed'); return true; }
 }
 
 // ---------------------------------------------------------------- one-tap hazard picker (big buttons)

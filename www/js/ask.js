@@ -1,7 +1,6 @@
 // Ask Radar: plain-English place requests with several criteria at once, answered from OpenStreetMap —
 // "quiet restaurant with parking, open late, vegetarian options, between Silver Spring and Bethesda".
 // Everything is checked against map data on the phone; where the map has no answer, the result says so.
-import { S } from './store.js';
 import { $, $$, esc, dist, fmtDist, toast, bus } from './util.js';
 import { map, layers, icons } from './mapview.js';
 import { E } from './engine.js';
@@ -9,6 +8,8 @@ import { overpass } from './overpass.js';
 import { openSheet, closeSheet, head, go } from './ui.js';
 import { startNav, navOn, addStop, navState, locate } from './nav.js';
 import { listen } from './native.js';
+import { savePlaceSheet } from './lists.js';
+import { S, remember } from './store.js';
 
 // ---------------------------------------------------------------- what kind of place
 const KINDS = [
@@ -192,7 +193,7 @@ export function askSheet(q = '') {
     const out = s.querySelector('#ask-out'), inp = s.querySelector('#ask-q');
     const run = async () => {
       const text = inp.value.trim(); if (text.length < 3) { inp.focus(); return; }
-      lastQ = text;
+      lastQ = text; remember({ q: text, kind: 'ask' });
       out.innerHTML = '<div class="empty"><span class="ms-spin"></span> Checking the map…</div>';
       try {
         const r = await askRadar(text);
@@ -201,7 +202,8 @@ export function askSheet(q = '') {
           r.results.map((x, i) => `<div class="row"><div class="main"><div class="ttl">${x.icon} ${esc(x.name)}</div>
             <div class="meta">${x.ahead != null ? `${fmtDist(Math.max(0, x.ahead))} ahead · ${x.off < 60 ? 'on the route' : fmtDist(x.off) + ' off'}` : x.detour != null ? `${fmtDist(x.detour)} out of the way${x.d != null ? ' · ' + fmtDist(x.d) + ' from you' : ''}` : x.d != null ? fmtDist(x.d) + (E.me ? ' from you' : ' from there') : ''}${x.sub ? ' · ' + esc(x.sub) : ''}</div>
             ${x.checks.length ? `<div class="meta checks">${x.checks.map((c) => `<span class="ck ${c.ok === true ? 'ok' : c.ok === false ? 'no' : 'unk'}">${c.ok === true ? '✓' : c.ok === false ? '✗' : '?'} ${esc(c.label)}</span>`).join('')}</div>` : ''}
-            <div class="orow"><button class="sbtn primary" data-nav="${i}">Navigate</button>${navOn() ? `<button class="sbtn" data-stop="${i}">Add stop</button>` : ''}<button class="sbtn" data-map="${i}">Map</button></div></div></div>`).join('');
+            <div class="orow"><button class="sbtn primary" data-nav="${i}">Navigate</button>${navOn() ? `<button class="sbtn" data-stop="${i}">Add stop</button>` : ''}<button class="sbtn" data-map="${i}">Map</button><button class="sbtn" data-save="${i}">⭐ Save</button></div></div></div>`).join('');
+        $$('[data-save]', out).forEach((b) => (b.onclick = () => { const x = r.results[+b.dataset.save]; savePlaceSheet({ name: x.name, lat: x.lat, lng: x.lng, note: x.sub || '', kind: x.kind }); }));
         $$('[data-nav]', out).forEach((b) => (b.onclick = async () => { const x = r.results[+b.dataset.nav]; closeSheet(); await startNav({ dest: { lat: x.lat, lng: x.lng, label: x.name }, name: x.name }); }));
         $$('[data-stop]', out).forEach((b) => (b.onclick = async () => { const x = r.results[+b.dataset.stop]; closeSheet(); await addStop({ id: x.id, name: x.name, kind: x.kind, lat: x.lat, lng: x.lng }); }));
         $$('[data-map]', out).forEach((b) => (b.onclick = () => { const x = r.results[+b.dataset.map]; closeSheet(); go('map'); layers.temp.clearLayers(); L.marker([x.lat, x.lng], { icon: icons.temp }).bindPopup(`<b>${esc(x.name)}</b><br><small>${esc(x.sub || x.kind)}</small>`).addTo(layers.temp).openPopup(); map.setView([x.lat, x.lng], 16); }));

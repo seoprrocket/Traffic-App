@@ -3,10 +3,11 @@ import { S, persist, save } from './store.js';
 import { $, $$, esc, dist, fmtDist, toast, uuid, bus, download, copyText } from './util.js';
 import { map } from './mapview.js';
 import { E, raise, startDrive } from './engine.js';
-import { locateOnce } from './native.js';
-import { locWidget, geoFail, busy, confirmDel, go } from './ui.js';
+import { locateOnce, speak } from './native.js';
+import { locWidget, geoFail, busy, confirmDel, go, openSheet, closeSheet, head } from './ui.js';
 import { analyzeRoute, drawRoute, hotspots } from './pages-main.js';
-import { apiStatus, api, creds, pushTrip, unpushTrip, pushState } from './netlify.js';
+import { apiStatus, api, creds, pushTrip, unpushTrip, pushState, pushReminder, unpushReminder } from './netlify.js';
+import { allSaved } from './lists.js';
 import { startNav, navOn } from './nav.js';
 import { askSheet } from './ask.js';
 
@@ -70,6 +71,7 @@ export function renderDrive() {
         <label class="f">Name (optional)<input type="text" id="dv-name" maxlength="80" placeholder="Dentist, Work, Airport…"></label>
         <div class="btns"><button class="btn primary" id="dv-nav-now">🧭 Navigate</button><button class="btn" id="dv-go">Check traffic &amp; cameras first</button></div>
       </div>
+      <div class="card sec" id="dv-tools"><h2>Quick actions</h2><div class="btns"><button class="btn" id="dv-remind">⏰ Remind me to leave</button><button class="btn" id="dv-live">📡 Share my live location</button><button class="btn" id="dv-saved">⭐ Saved places</button></div><div id="dv-reminders"></div></div>
       <div class="card sec" id="dv-ask"><h2>Ask Radar</h2><p class="note" style="margin:0">One sentence, several conditions: <i>quiet restaurant with parking, open late, vegetarian options, between Silver Spring and Bethesda</i>.</p><div class="btns"><button class="btn" id="dv-ask-btn">💬 Ask Radar</button></div></div>
       <div id="dv-out" class="sec"></div>
       <div class="sec" id="dv-trips"></div>
@@ -80,6 +82,9 @@ export function renderDrive() {
     else locateOnce().then(setStartHere).catch(() => {});
     $('#dv-go').onclick = checkDrive;
     $('#dv-ask-btn').onclick = () => askSheet();
+    $('#dv-remind').onclick = () => reminderSheet();
+    $('#dv-live').onclick = () => shareLiveLocation();
+    $('#dv-saved').onclick = () => go('saved');
     $$('#dv-when button').forEach((b) => (b.onclick = () => {
       $$('#dv-when button').forEach((x) => x.setAttribute('aria-pressed', x === b));
       $('#dv-arrive-f').hidden = b.dataset.w !== 'arrive'; $('#dv-depart-f').hidden = b.dataset.w !== 'depart';
@@ -93,8 +98,115 @@ export function renderDrive() {
       busy(e.currentTarget, false);
     };
   }
-  renderTrips(); renderRisk();
+  renderTrips(); renderRisk(); renderReminders();
 }
+
+// ---------------------------------------------------------------- "Remind me to leave" (no route needed)
+const parseWhen = (text) => {
+  const t = String(text || '').toLowerCase().trim(); if (!t) return null;
+  let m = /in (\d+)\s*(min|minute|minutes|hour|hours|h)\b/.exec(t);
+  if (m) return Date.now() + +m[1] * (/h/.test(m[2]) ? 3600e3 : 60e3);
+  if (/\bnoon\b/.test(t)) { const d = new Date(); d.setHours(12, 0, 0, 0); if (d < Date.now()) d.setDate(d.getDate() + 1); return d.getTime(); }
+  m = /(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?/.exec(t); if (!m) return null;
+  let h = +m[1]; const min = +(m[2] || 0); const ap = (m[3] || '').replace(/\./g, '');
+  if (ap === 'pm' && h < 12) h += 12; if (ap === 'am' && h === 12) h = 0;
+  const d = new Date(); d.setHours(h, min, 0, 0);
+  if (!ap && d < Date.now() && h < 12) d.setHours(h + 12);      // "remind me at 5" in the afternoon means 5 PM
+  if (d < Date.now()) d.setDate(d.getDate() + 1);
+  return d.getTime();
+};
+const localIso = (t) => new Date(t - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+export function reminderSheet({ whenText = '', dest = null, name = '' } = {}) {
+  const at0 = parseWhen(whenText) || Date.now() + 30 * MIN;
+  const places = allSaved();
+  openSheet(`${head('Remind me to leave')}
+    <div class="sec">
+      <label class="f">Leave at<input type="datetime-local" id="rm-at" value="${localIso(at0)}"></label>
+      <label class="f">For (optional)<input id="rm-name" maxlength="80" value="${esc(name)}" placeholder="Dentist, pick up kids, flight…"></label>
+      <label class="f">Where to (optional)<select id="rm-dest"><option value="">No destination</option>${places.map((p, i) => `<option value="${i}"${dest && p.id === dest.id ? ' selected' : ''}>${p.list.icon} ${esc(p.name)}</option>`).join('')}</select><small class="hint">Pick a saved place and the reminder can start navigation with one tap.</small></label>
+      <div class="btns"><button class="btn primary" id="rm-save">Set reminder</button></div>
+      <p class="note" style="margin:0">${S.db.pushOn ? 'You\'ll get a phone notification even if the app is closed.' : 'Turn on phone notifications (Settings) to be reminded when the app is closed; with it off, the reminder only rings while the app is open.'}</p>
+    </div>`, (s) => {
+    s.querySelector('#rm-save').onclick = async () => {
+      const at = new Date(s.querySelector('#rm-at').value).getTime();
+      if (!at || at < Date.now() + 30000) { toast('Pick a time in the future'); return; }
+      const sel = s.querySelector('#rm-dest').value, p = sel === '' ? null : places[+sel];
+      const r = { id: uuid(), at, title: s.querySelector('#rm-name').value.trim() || (p ? p.name : 'Leave'), dest: p ? { lat: p.lat, lng: p.lng, label: p.name } : null, alerted: false, created: Date.now() };
+      S.db.reminders = [...(S.db.reminders || []).filter((x) => x.at > Date.now() - 3600e3), r]; save();
+      closeSheet(); renderReminders();
+      const pushed = await pushReminder({ id: r.id, at: r.at - 2 * MIN, title: `Time to leave${r.title !== 'Leave' ? ' for ' + r.title : ''}`, body: r.dest ? `Open the app and tap Go to navigate to ${r.dest.label}.` : 'Your leave-by reminder.', url: './#route' });
+      toast(pushed ? `Reminder set for ${clock(r.at)}. You'll get a notification.` : `Reminder set for ${clock(r.at)} (rings while the app is open).`);
+    };
+  });
+}
+export function renderReminders() {
+  const host = $('#dv-reminders'); if (!host) return;
+  const list = (S.db.reminders || []).filter((x) => x.at > Date.now() - 3600e3).sort((a, b) => a.at - b.at);
+  host.innerHTML = list.length ? `<h3 style="margin:10px 0 4px">Reminders</h3>${list.map((r) => `<div class="row ${r.at < Date.now() ? 't' : 'i'}"><div class="main"><div class="ttl">⏰ ${esc(r.title)}${r.at < Date.now() ? '<span class="tag bad">Now</span>' : ''}</div><div class="meta">Leave at ${dayClock(r.at)} · ${until(r.at)}${r.dest ? ' · to ' + esc(r.dest.label) : ''}</div>
+    <div class="orow">${r.dest ? `<button class="sbtn primary" data-rgo="${r.id}">Go</button>` : ''}<button class="sbtn danger" data-rdel="${r.id}">Delete</button></div></div></div>`).join('')}` : '';
+  $$('[data-rgo]', host).forEach((b) => (b.onclick = () => { const r = S.db.reminders.find((x) => x.id === b.dataset.rgo); startNav({ dest: r.dest, name: r.dest.label }); }));
+  $$('[data-rdel]', host).forEach((b) => (b.onclick = () => { unpushReminder(b.dataset.rdel); S.db.reminders = S.db.reminders.filter((x) => x.id !== b.dataset.rdel); save(); renderReminders(); }));
+}
+/** Every 30 s while the app is open: ring due reminders. */
+export function reminderTick() {
+  const now = Date.now();
+  for (const r of S.db.reminders || []) {
+    if (r.alerted || r.at - now > 2 * MIN) continue;
+    r.alerted = true; persist();
+    raise('info', `Time to leave${r.title !== 'Leave' ? ' for ' + r.title : ''}`, r.dest ? `Drive tab → Go starts navigation to ${r.dest.label}.` : `It's ${clock(r.at)}.`, `Time to leave${r.title !== 'Leave' ? ' for ' + r.title : ''}.`);
+    renderReminders();
+  }
+}
+
+// ---------------------------------------------------------------- live location without a trip
+export async function shareLiveLocation() {
+  const t = T();
+  if (t) return shareDrive();
+  const L0 = S.db.liveShare;
+  if (L0) {
+    openSheet(`${head('Sharing your location')}<div class="sec"><p class="note" style="margin:0">Live since ${clock(L0.startedAt)}. The link stops working when you stop sharing (or after 4 hours).</p><div class="btns"><button class="btn primary" id="ls-again">Send the link again</button><button class="btn danger" id="ls-stop">Stop sharing</button></div></div>`, (s) => {
+      s.querySelector('#ls-again').onclick = () => { closeSheet(); sendShare(L0.url, `${S.db.profile.name || 'Your friend'} is sharing their live location with you.`, true); };
+      s.querySelector('#ls-stop').onclick = () => { closeSheet(); stopLiveShare(); };
+    });
+    return;
+  }
+  const me = E.me || (await locateOnce().catch(() => null));
+  if (!me) { toast('Turn on location first'); return; }
+  const who = S.db.profile.name || 'Your friend';
+  try {
+    const secret = uuid() + uuid();
+    const r = await api('share', { action: 'start', secret, data: { name: who, destLabel: '', dest: null, lat: me.lat, lng: me.lng, heading: E.heading } });
+    const url = new URL('share.html#' + r.token, location.href).href;
+    S.db.liveShare = { token: r.token, secret, url, startedAt: Date.now() }; persist();
+    if (!E.driving) startDrive();                               // keeps the GPS running so the dot moves
+    paintLivePill();
+    speak('Sharing your live location.');
+    sendShare(url, `${who} is sharing their live location with you.`);
+  } catch {
+    const where = `https://www.google.com/maps?q=${me.lat.toFixed(5)},${me.lng.toFixed(5)}`;
+    sendShare(where, 'Here\'s where I am right now:');
+  }
+}
+export function stopLiveShare() {
+  const L0 = S.db.liveShare; if (!L0) return;
+  api('share', { action: 'end', token: L0.token, secret: L0.secret, arrived: false }).catch(() => {});
+  S.db.liveShare = null; persist(); paintLivePill(); toast('Stopped sharing your location');
+}
+function paintLivePill() {
+  let el = $('#livepill');
+  if (!S.db.liveShare) { el?.remove(); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'livepill'; el.innerHTML = '<span>📡 Sharing your location</span><button type="button">Stop</button>'; el.querySelector('button').onclick = stopLiveShare; $('#view-map').appendChild(el); }
+}
+let liveAt = 0;
+bus.on('fix', (p) => {
+  const L0 = S.db.liveShare; if (!L0 || T()) return;
+  if (Date.now() - L0.startedAt > 4 * 3600e3) { stopLiveShare(); return; }
+  if (Date.now() - liveAt > 20000) {
+    liveAt = Date.now();
+    api('share', { action: 'update', token: L0.token, secret: L0.secret, data: { lat: p.lat, lng: p.lng, heading: p.heading, mph: Math.round(p.speed * 2.23694) } }).catch(() => {});
+  }
+});
+setTimeout(paintLivePill, 0);
 function setStartHere(p) {
   if (form.start.lat != null) return;
   form.start.lat = +p.lat.toFixed(6); form.start.lng = +p.lng.toFixed(6); form.start.label = 'My location';

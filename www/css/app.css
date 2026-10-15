@@ -388,3 +388,22 @@ body.nav .mapsearch{display:none}
 .ck.ok{background:color-mix(in srgb,var(--ok) 18%,var(--surface));color:var(--fg)}
 .ck.no{background:color-mix(in srgb,var(--danger) 16%,var(--surface));color:var(--fg)}
 .navbot{gap:6px} .navbtn{min-width:40px;height:40px;font-size:17px} .navbtn.end{padding:0 12px}
+
+/* Netlify's free-plan "Powered by Netlify" badge: keep it off the tab bar until it's turned off in Netlify (Project configuration → General) */
+#nl-badge-frame{bottom:calc(66px + env(safe-area-inset-bottom,0px)) !important;right:auto !important;left:8px !important;opacity:.9}
+
+/* Search bar above the speed sign while driving; the speed sign moves down under it */
+body.driving .mapsearch{top:12px}
+body.driving .speedo{top:66px}
+body.driving.nav .speedo{top:auto}
+/* Saved places */
+.saved-pin span{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#fff;border:2px solid #f59e0b;font-size:15px;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+#ms-mic{border:0;background:var(--you);color:#fff;border-radius:999px;width:34px;height:34px;font-size:16px;flex:none;margin-left:4px}
+#ms-mic.listening{animation:pulse 1s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(59,130,246,.6)}100%{box-shadow:0 0 0 10px rgba(59,130,246,0)}}
+.ms-recent{display:flex;justify-content:space-between;align-items:center;padding:6px 12px 2px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.ms-recent button{border:0;background:none;color:var(--you);font:600 12px var(--body);text-transform:none;letter-spacing:0}
+.ms-row .ms-del{border:0;background:none;color:var(--muted);font-size:14px;padding:4px 8px;margin-left:auto}
+#livepill{position:absolute;left:50%;transform:translateX(-50%);top:66px;z-index:660;display:flex;gap:10px;align-items:center;background:var(--danger);color:#fff;border-radius:999px;padding:6px 8px 6px 14px;font:600 13px var(--body);box-shadow:0 4px 12px rgba(0,0,0,.3)}
+#livepill button{border:0;background:#fff;color:var(--danger);border-radius:999px;padding:4px 10px;font:700 12px var(--body)}
+body.driving #livepill{top:120px}

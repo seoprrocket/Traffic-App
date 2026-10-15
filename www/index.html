@@ -29,7 +29,7 @@
     <section class="view mapview" id="view-map">
       <div id="map" class="mapbox"></div>
       <div class="mapsearch" id="mapsearch">
-        <div class="ms-bar"><span class="ms-glass" aria-hidden="true">🔍</span><input id="ms-q" type="search" placeholder="Search cameras, streets, addresses" autocomplete="off" aria-label="Search cameras, streets and addresses"><button id="ms-x" type="button" aria-label="Clear search" hidden>✕</button></div>
+        <div class="ms-bar"><span class="ms-glass" aria-hidden="true">🔍</span><input id="ms-q" type="search" placeholder="Search or say a place, camera, street" autocomplete="off" aria-label="Search cameras, streets and addresses"><button id="ms-x" type="button" aria-label="Clear search" hidden>✕</button><button id="ms-mic" type="button" aria-label="Talk to the map">🎤</button></div>
         <div class="ms-res" id="ms-res" hidden></div>
       </div>
       <div class="speedo" id="speedo" hidden>
@@ -59,6 +59,7 @@
         <div><span class="sw" style="background:var(--danger)"></span>Ticket spot</div>
         <div><span class="sw" style="background:var(--warn)"></span>Camera</div>
         <div><span class="sw" style="background:#0d9488;border-radius:50%"></span>Driven past</div>
+        <div><span class="sw" style="background:#f59e0b;border-radius:50%"></span>Saved place</div>
         <div><span class="sw" style="background:var(--report)"></span>Community</div>
         <div><span class="sw" style="background:#7a3fd1"></span>Parking ticket</div>
       </div>
@@ -84,6 +85,7 @@
 
     <section class="view" id="view-parking" hidden><div class="wrap" id="p-parking"></div></section>
     <section class="view" id="view-import" hidden><div class="wrap" id="p-import"></div></section>
+    <section class="view" id="view-saved" hidden><div class="wrap" id="p-saved"></div></section>
     <section class="view" id="view-add-location" hidden><div class="wrap" id="p-add"></div></section>
     <section class="view" id="view-driver-profile" hidden><div class="wrap" id="p-profile"></div></section>
     <section class="view" id="view-account" hidden><div class="wrap" id="p-account"></div></section>

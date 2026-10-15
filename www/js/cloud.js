@@ -81,6 +81,8 @@ const toRow = {
   reports: (r) => ({ id: r.id, type: r.type, lat: r.lat, lng: r.lng, place: r.place || null, note: scrub(r.note) || null }),
   alert_log: (a) => ({ id: a.id, kind: a.kind, title: a.title, detail: a.sub || null, at: new Date(a.time).toISOString() }),
   drive_events: (e) => ({ id: e.id, kind: e.kind, zone: e.zone, zone_type: e.zoneType, speed: e.speed ?? null, speed_limit: e.limit ?? null, at: new Date(e.time).toISOString() }),
+  lists: (l) => ({ id: l.id, name: l.name, icon: l.icon || '⭐', share_code: l.shareCode || null }),
+  list_places: (p) => ({ id: p.id, list_id: p.listId, name: p.name, lat: p.lat, lng: p.lng, note: p.note || null, kind: p.kind || null }),
   camera_passes: (p) => ({ id: p.id, camera_id: p.cameraId, name: p.name, kind: p.kind, speed_limit: p.limit ?? null, jurisdiction: p.jurisdiction || null, lat: p.lat, lng: p.lng, mph: p.mph ?? null, at: new Date(p.time).toISOString() }),
   trips: (t) => ({ id: t.id, start_lat: t.start.lat, start_lng: t.start.lng, end_lat: t.end.lat, end_lng: t.end.lng,
     started_at: new Date(t.startedAt).toISOString(), ended_at: new Date(t.endedAt).toISOString(), meters: t.meters, max_mph: t.maxMph, alerts: t.alerts || 0 }),
@@ -95,9 +97,11 @@ const fromRow = {
     status: r.status, reason: r.moderation_reason, expires: Date.parse(r.expires_at), confirms: r.confirms, denies: r.denies }),
   alert_log: (r) => ({ id: r.id, kind: r.kind, title: r.title, sub: r.detail || '', time: Date.parse(r.at) }),
   drive_events: (r) => ({ id: r.id, kind: r.kind, zone: r.zone, zoneType: r.zone_type, speed: r.speed, limit: r.speed_limit, time: Date.parse(r.at) }),
+  lists: (r) => ({ id: r.id, name: r.name, icon: r.icon || '⭐', shareCode: r.share_code || '', ownerId: r.owner_id, mine: r.owner_id === S.user?.id, created: Date.parse(r.created_at) }),
+  list_places: (r) => ({ id: r.id, listId: r.list_id, name: r.name, lat: r.lat, lng: r.lng, note: r.note || '', kind: r.kind || '', addedBy: r.added_by, mine: r.added_by === S.user?.id, time: Date.parse(r.created_at), created: Date.parse(r.created_at) }),
   camera_passes: (r) => ({ id: r.id, cameraId: r.camera_id, name: r.name, kind: r.kind, limit: r.speed_limit, jurisdiction: r.jurisdiction || '', lat: r.lat, lng: r.lng, mph: r.mph, over: r.speed_limit && r.mph != null ? r.mph - r.speed_limit : null, time: Date.parse(r.at), created: Date.parse(r.at) }),
 };
-const LOCAL = { tickets: 'tickets', cameras: 'cameras', routes: 'routes', commutes: 'commutes', reports: 'reports', alert_log: 'alerts', drive_events: 'events', trips: 'trips', camera_passes: 'passes' };
+const LOCAL = { tickets: 'tickets', cameras: 'cameras', routes: 'routes', commutes: 'commutes', reports: 'reports', alert_log: 'alerts', drive_events: 'events', trips: 'trips', camera_passes: 'passes', lists: 'lists', list_places: 'places' };
 
 // ---------------------------------------------------------------- push
 let flushing = false;
@@ -168,11 +172,12 @@ export async function syncNow() {
     await pull('alert_log', (q) => q.order('at', { ascending: false }).limit(300));
     await pull('drive_events', (q) => q.order('at', { ascending: false }).limit(500));
     try { await pull('camera_passes', (q) => q.order('at', { ascending: false }).limit(3000)); } catch (e) { console.warn('camera_passes not set up yet', e); }
+    try { await pull('lists'); await pull('list_places', (q) => q.order('created_at', { ascending: false }).limit(2000)); } catch (e) { console.warn('saved lists not set up yet', e); }
 
     const { data: p } = await sb.from('profiles').select('*').eq('id', uid).single();
     if (p) {
       S.db.profile = { ...S.db.profile, name: p.display_name || S.db.profile.name, homeLabel: p.home_label || S.db.profile.homeLabel,
-        workLabel: p.work_label || S.db.profile.workLabel, avoidRisk: p.avoid_risk, emailCoach: p.email_coach };
+        workLabel: p.work_label || S.db.profile.workLabel, home: p.home_pt || S.db.profile.home || null, work: p.work_pt || S.db.profile.work || null, avoidRisk: p.avoid_risk, emailCoach: p.email_coach };
       if (p.settings && Object.keys(p.settings).length) S.db.settings = { ...S.db.settings, ...p.settings };
       if (p.accepted_terms_at) S.db.acceptedTerms = S.db.acceptedTerms || Date.parse(p.accepted_terms_at);
       else if (S.db.acceptedTerms) saveProfile();
@@ -188,11 +193,24 @@ export async function syncNow() {
 export async function saveProfile() {
   if (!sb || !S.user) return;
   const P = S.db.profile;
-  await sb.from('profiles').update({
-    display_name: P.name || null, home_label: P.homeLabel || null, work_label: P.workLabel || null, avoid_risk: P.avoidRisk,
+  const row = {
+    display_name: P.name || null, home_label: P.homeLabel || null, work_label: P.workLabel || null, home_pt: P.home || null, work_pt: P.work || null, avoid_risk: P.avoidRisk,
     email_coach: !!P.emailCoach, settings: S.db.settings,
     accepted_terms_at: S.db.acceptedTerms ? new Date(S.db.acceptedTerms).toISOString() : null,
-  }).eq('id', S.user.id);
+  };
+  const { error } = await sb.from('profiles').update(row).eq('id', S.user.id);
+  if (error && /home_pt|work_pt/.test(error.message || '')) {           // saved-lists migration not run yet: save the rest
+    const { home_pt, work_pt, ...rest } = row;
+    await sb.from('profiles').update(rest).eq('id', S.user.id);
+  }
+}
+/** Join a friend's shared list by its code (needs the saved-lists migration and a signed-in account). */
+export async function joinList(code) {
+  if (!sb || !S.user) throw new Error('Sign in first (More → Account), then open the link again.');
+  const { data, error } = await sb.rpc('join_list', { code: String(code || '').trim().toUpperCase() });
+  if (error) throw new Error(/does not match/.test(error.message) ? 'That code doesn\'t match a shared list.' : /join_list/.test(error.message) ? 'Shared lists aren\'t set up on the server yet (run the setup SQL).' : error.message);
+  await syncNow();
+  return data;
 }
 
 // ---------------------------------------------------------------- official cameras (DC + Maryland)

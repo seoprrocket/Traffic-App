@@ -7,16 +7,16 @@ const KEY = 'ticketRadar.v1';
 export const DEFAULT_SETTINGS = {
   lead: 5, ticketRadius: 300, alertType: 'voice', share: false, ai: true, sensitivity: 'medium',
   officialCams: true, speedLimits: true, handsFreeAuto: true,
-  carStyle: 'dot', carColor: '#f4f5f7', navMuted: false, navVoice: 'all', avoid: [], engine: 'petrol', ecoRoutes: false, parkLayer: false, logPasses: true, speedOverBy: 5, speedMax: 0, roadBumps: true, roadCurves: true, roadLimits: true, roadTolls: true,
+  screenOn: 'always', carStyle: 'dot', carColor: '#f4f5f7', navMuted: false, navVoice: 'all', avoid: [], engine: 'petrol', ecoRoutes: false, parkLayer: false, logPasses: true, speedOverBy: 5, speedMax: 0, roadBumps: true, roadCurves: true, roadLimits: true, roadTolls: true,
 };
-export const DEFAULT_PROFILE = { name: '', homeLabel: '', workLabel: '', avoidRisk: 'warn', emailCoach: true };
-const LISTS = ['tickets', 'cameras', 'reports', 'routes', 'commutes', 'events', 'alerts', 'trips', 'outbox', 'official', 'community', 'hotspots', 'coach', 'predictions', 'disputes', 'plans', 'passes'];
+export const DEFAULT_PROFILE = { name: '', homeLabel: '', workLabel: '', home: null, work: null, avoidRisk: 'warn', emailCoach: true };
+const LISTS = ['tickets', 'cameras', 'reports', 'routes', 'commutes', 'events', 'alerts', 'trips', 'outbox', 'official', 'community', 'hotspots', 'coach', 'predictions', 'disputes', 'plans', 'passes', 'lists', 'places', 'recent', 'reminders'];
 
 function seed() {
   return {
     v: 3,
     tickets: [{ id: uuid(), street: 'Example — New York Ave NE', lat: 38.9146, lng: -76.9859, date: '2026-08-14', time: '', type: 'Speed camera', fine: 125, speed: 42, limit: 30, notes: 'Sample entry so you can see how it works. Edit or delete it.', example: true, shared: false, alertType: 'voice' }],
-    cameras: [], reports: [], routes: [], commutes: [], events: [], alerts: [], trips: [], outbox: [], passes: [],
+    cameras: [], reports: [], routes: [], commutes: [], events: [], alerts: [], trips: [], outbox: [], passes: [], lists: [], places: [], recent: [], reminders: [],
     official: [], officialAt: 0, community: [], communityAt: 0, hotspots: [], coach: [], predictions: [], disputes: [],
     settings: { ...DEFAULT_SETTINGS }, profile: { ...DEFAULT_PROFILE },
     acceptedTerms: null, syncedUser: null, lastPull: 0,
@@ -76,7 +76,7 @@ export function queue(table, op, row) {
 }
 
 // ---- Typed mutators (local first, then queue) -----------------------------
-const TABLE = { tickets: 'tickets', cameras: 'cameras', routes: 'routes', commutes: 'commutes' };
+const TABLE = { tickets: 'tickets', cameras: 'cameras', routes: 'routes', commutes: 'commutes', lists: 'lists', places: 'list_places' };
 export function upsertLocal(list, rec) {
   const arr = S.db[list]; const i = arr.findIndex((x) => x.id === rec.id);
   if (i >= 0) arr[i] = rec; else arr.push(rec);
@@ -89,6 +89,7 @@ export function removeLocal(list, id) {
   if (TABLE[list]) queue(TABLE[list], 'delete', { id });
   if (list === 'reports') queue('reports', 'delete', { id });
   if (list === 'passes') queue('camera_passes', 'delete', { id });
+  if (list === 'lists') S.db.places.filter((p) => p.listId === id).forEach((p) => { S.db.places = S.db.places.filter((x) => x !== p); });
   save();
 }
 
@@ -104,6 +105,14 @@ export function logEvent(kind, zone) {
   queue('drive_events', 'insert', { id: e.id });
   persist(); bus.emit('log');
 }
+// ---- Recent searches (this phone only) --------------------------------------
+export function remember(entry) {
+  const key = (entry.q || entry.label || '').trim().toLowerCase(); if (!key) return;
+  S.db.recent = [{ ...entry, time: Date.now() }, ...S.db.recent.filter((r) => (r.q || r.label || '').trim().toLowerCase() !== key)].slice(0, 20);
+  persist();
+}
+export function forgetRecent(time) { S.db.recent = time == null ? [] : S.db.recent.filter((r) => r.time !== time); persist(); }
+
 /** Auto-log: you just drove into a camera's zone. One row per pass; the speed is updated to your fastest while in the zone. */
 export function logPass(c, mph) {
   const p = { id: uuid(), cameraId: c.id, name: c.name, kind: c.kind, limit: c.limit || null, jurisdiction: c.jurisdiction || (c.official ? '' : 'Your pin'), lat: c.lat, lng: c.lng, time: Date.now(), mph: Math.round(mph), over: c.limit ? Math.round(mph) - c.limit : null };

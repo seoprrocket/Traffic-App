@@ -48,7 +48,7 @@ const byId = { official: new Map(), camera: new Map(), ticket: new Map() };
 /** The marker drawn for an official camera, one of your pins, or a ticket (so search can open its popup). */
 export const markerFor = (kind, id) => byId[kind]?.get(id) || null;
 export function drawMarkers() {
-  Object.values(layers).forEach((l) => { if (l !== layers.route && l !== layers.temp) l.clearLayers(); });
+  Object.values(layers).forEach((l) => { if (l !== layers.route && l !== layers.temp && l !== layers.saved) l.clearLayers(); });   // saved places redraw themselves (lists.js)
   Object.values(byId).forEach((m) => m.clear());
   const rr = S.db.settings.ticketRadius * sens().f;
   S.db.tickets.forEach((t) => {

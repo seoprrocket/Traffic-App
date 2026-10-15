@@ -39,6 +39,7 @@ export function renderProfile() {
       <div class="grid2">
         <label class="f">Home area<input type="text" id="pf-home" maxlength="120" value="${esc(P.homeLabel)}" placeholder="Gaithersburg, MD"></label>
         <label class="f">Work / usual destination<input type="text" id="pf-work" maxlength="120" value="${esc(P.workLabel)}" placeholder="Downtown DC"></label>
+        <div class="f"><span>Home &amp; Work addresses</span><small class="hint">${P.home ? '🏠 ' + esc(P.home.label || 'set') : '🏠 not set'} · ${P.work ? '💼 ' + esc(P.work.label || 'set') : '💼 not set'} — used for "take me home" and one-tap navigation.</small><div class="btns"><button type="button" class="btn" data-go-saved>Set Home &amp; Work</button></div></div>
       </div>
       <label class="f">When a route has risk points<select id="pf-avoid">
         <option value="warn"${P.avoidRisk === 'warn' ? ' selected' : ''}>Just warn me</option>
@@ -50,6 +51,7 @@ export function renderProfile() {
       <label class="switch"><input type="checkbox" id="pf-email" ${P.emailCoach ? 'checked' : ''}><span><b>Weekly coach email</b><small>A short review of your driving week, Monday mornings. Needs an account.</small></span></label>
       <button class="btn primary" type="submit">Save profile</button>
     </form>`;
+  host.querySelector('[data-go-saved]').onclick = () => go('saved');
   host.querySelector('#pf').onsubmit = (e) => {
     e.preventDefault();
     Object.assign(S.db.profile, { name: $('#pf-name').value.trim(), homeLabel: $('#pf-home').value.trim(), workLabel: $('#pf-work').value.trim(),
@@ -200,6 +202,9 @@ export function openSettings() {
     <div id="s-push" class="note">Checking…</div>
     <h3 class="sech">More</h3>
     <label class="switch"><input type="checkbox" id="s-off" ${st.officialCams ? 'checked' : ''}><span><b>Official camera lists</b><small>Warn me about the cameras DC, Montgomery County and Prince George's County publish, plus county lists, not just my pins.</small></span></label>
+    <div class="f"><span>Map direction</span><small class="hint">The map always faces north (true north up). The compass on the map and the hands-free screen show which way you're travelling.</small></div>
+    <div class="f"><span>Recent searches</span><small class="hint">${(st && S.db.recent?.length) || 0} saved on this phone (never uploaded).</small><div class="btns"><button type="button" class="btn" id="s-clr-recent"${S.db.recent?.length ? '' : ' disabled'}>Delete recent searches</button></div></div>
+    <label class="f">Keep the screen on<select id="s-screen"><option value="always"${st.screenOn !== 'driving' ? ' selected' : ''}>Always while the app is open</option><option value="driving"${st.screenOn === 'driving' ? ' selected' : ''}>Only while driving</option></select><small class="hint">Stops the phone from dimming, sleeping or locking while Invictus Traffic Radar is on screen. Switching to another app lets it sleep as usual.</small></label>
     <h3>Navigation</h3>
     <label class="f">Voice guidance<select id="s-nv"><option value="all"${st.navVoice === 'all' || !st.navVoice ? ' selected' : ''}>Directions and alerts</option><option value="alerts"${st.navVoice === 'alerts' ? ' selected' : ''}>Alerts only (cameras, hazards, traffic)</option><option value="mute"${st.navVoice === 'mute' ? ' selected' : ''}>Mute everything while navigating</option></select></label>
     <div class="f"><span>Avoid on routes</span><div class="chips" style="margin-top:6px">${AVOID.map(([k, lb]) => `<label class="chip"><input type="checkbox" name="s-avoid" value="${k}" ${(st.avoid || []).includes(k) ? 'checked' : ''}> ${lb}</label>`).join('')}</div><small class="hint">Routes come from OpenStreetMap; when nothing avoids all of them, the app tells you which it couldn't skip.</small></div>
@@ -222,7 +227,7 @@ export function openSettings() {
       alertType: s.querySelector('#s-at').value, lead: Math.min(15, Math.max(1, +s.querySelector('#s-lead').value || 4)),
       ticketRadius: Math.min(1000, Math.max(50, +s.querySelector('#s-rad').value || 300)), share: s.querySelector('#s-share').checked,
       ai: s.querySelector('#s-ai').checked, sensitivity: s.querySelector('#s-sens').value, officialCams: s.querySelector('#s-off').checked, logPasses: s.querySelector('#s-log').checked,
-      navVoice: s.querySelector('#s-nv').value, navVoiceSet: true, navMuted: s.querySelector('#s-nv').value === 'mute', avoid: [...s.querySelectorAll('input[name="s-avoid"]:checked')].map((x) => x.value), engine: s.querySelector('#s-eng').value, ecoRoutes: s.querySelector('#s-eco').checked,
+      screenOn: s.querySelector('#s-screen').value, navVoice: s.querySelector('#s-nv').value, navVoiceSet: true, navMuted: s.querySelector('#s-nv').value === 'mute', avoid: [...s.querySelectorAll('input[name="s-avoid"]:checked')].map((x) => x.value), engine: s.querySelector('#s-eng').value, ecoRoutes: s.querySelector('#s-eco').checked,
       speedLimits: s.querySelector('#s-lim').checked, handsFreeAuto: s.querySelector('#s-hf').checked,
       speedOverBy: s.querySelector('#s-over').value === '' ? '' : +s.querySelector('#s-over').value,
       speedMax: Math.max(0, Math.min(120, +s.querySelector('#s-max').value || 0)),
@@ -235,6 +240,7 @@ export function openSettings() {
     $$('input[name="carstyle"]', s).forEach((r) => (r.onchange = () => { S.db.settings.carStyle = r.value; carRepaint(); }));
     $$('.swatch', s).forEach((b) => (b.onclick = () => { S.db.settings.carColor = b.dataset.c; carRepaint(); }));
     s.querySelector('#s-save').onclick = () => { read(); save(); saveProfile(); closeSheet(); toast('Settings saved'); };
+    s.querySelector('#s-clr-recent').onclick = (e) => { S.db.recent = []; persist(); e.currentTarget.disabled = true; toast('Recent searches deleted'); };
     s.querySelector('#s-test').onclick = () => { read(); persist(); unlockAudio(); closeSheet(); playSamples(); toast('Playing 11 sample alerts. This takes about a minute.', 4000); };
     s.querySelector('#s-clr').onclick = () => { S.db.tickets = S.db.tickets.filter((t) => !t.example); save(); closeSheet(); toast('Examples removed'); };
     paintPush(s.querySelector('#s-push'));

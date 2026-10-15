@@ -3,7 +3,7 @@ import { S, save, upsertLocal , allCameras } from './store.js';
 import { $, $$, bus, debounce, toast, today, uuid, compassPoint } from './util.js';
 import { map, drawMarkers, placeMe, fitAll } from './mapview.js';
 import { E, startDrive, stopDrive, overBy } from './engine.js';
-import { locateOnce, unlockAudio, isNative } from './native.js';
+import { locateOnce, unlockAudio, isNative, keepAwake } from './native.js';
 import { initAuth, flush, loadCommunity, loadOfficialCameras, vote, loadAgentOutputs, cloudConfigured } from './cloud.js';
 import { addChooser, scanTicket, reportForm, ticketFields, readTicket, bindTicketType, ticketFromCamera, locWidget, pageHead, bindBack, geoFail } from './ui.js';
 import { renderList, renderStats, renderMore } from './pages-main.js';
@@ -12,6 +12,8 @@ import { renderParking } from './parking.js';
 import { renderImport } from './importer.js';
 import { navOn } from './nav.js';
 import { setupMapSearch } from './mapsearch.js';
+import { renderSaved, drawSaved, handleJoinHash } from './lists.js';
+import { reminderTick } from './trip.js';
 import { renderCommunityMap, renderFeed, renderContrib, renderHeat } from './pages-community.js';
 import { renderRoutes, renderCommutes, commuteCheck } from './pages-plan.js';
 import { renderCoach, renderTips, renderDispute } from './pages-learn.js';
@@ -54,6 +56,7 @@ const TABS = ['map', 'list', 'stats', 'route', 'more'];
 const PAGES = {
   'add-location': { t: 'Add Location', e: '➕', d: 'Log a ticket spot by address', g: 'Log', r: renderAdd },
   'import': { t: 'Import Tickets', e: '📥', d: 'From cite-web.com, screenshots, photos or PDFs', g: 'Log', r: renderImport },
+  'saved': { t: 'Saved Places', e: '⭐', d: 'Home, Work, favorites, lists shared with friends', g: 'Plan', r: renderSaved },
   'parking': { t: 'Parking', e: '🅿️', d: 'Find a spot, mark where you parked', g: 'Plan', r: renderParking },
   'saved-routes': { t: 'Saved Routes', e: '🧭', d: 'Your frequent trips, pre-checked', g: 'Plan', r: renderRoutes },
   'commute-schedules': { t: 'Commute Schedules', e: '🗓', d: 'Warnings before you leave', g: 'Plan', r: renderCommutes },
@@ -154,8 +157,13 @@ $('#compass').onclick = () => toast(E.heading == null ? 'True north is up on the
 (async function boot() {
   setupHandsFree();
   setupMapSearch();
+  // Keep the screen on while the app is open (Settings → "Keep the screen on"); drive mode adds its own hold
+  if (S.db.settings.screenOn !== 'driving') keepAwake(true, 'app');
+  bus.on('change', () => keepAwake(S.db.settings.screenOn !== 'driving', 'app'));
   drawMarkers();
-  show(location.hash.slice(1) || 'map', false);
+  drawSaved();
+  if (!handleJoinHash()) show(location.hash.slice(1) || 'map', false);
+  setInterval(reminderTick, 30000);
   setTimeout(() => fitAll(null), 150);
   await initAuth();
   loadOfficialCameras();

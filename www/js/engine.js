@@ -66,7 +66,7 @@ export async function startDrive() {
   unlockAudio();
   askNotifyPermission();                                        // ask, but never wait on the answer before watching GPS
   E.driving = true; last = null; ref = null; headRef = null; trip = null; E.speed = 0;
-  keepAwake.wanted = true; keepAwake(true);
+  keepAwake(true, 'drive');
   if (S.db.settings.alertType === 'voice') speak(`Drive mode on. I'll warn you ${S.db.settings.lead} minutes before each camera in your direction.`);
   let warned = false;
   stopWatch = await watchLocation(onFix, (e) => {
@@ -80,7 +80,7 @@ export function stopDrive() {
   if (!E.driving) return;
   E.driving = false;
   try { stopWatch?.(); } catch { /* ignore */ }
-  stopWatch = null; keepAwake.wanted = false; keepAwake(false);
+  stopWatch = null; keepAwake(false, 'drive');
   if (trip && last && trip.meters > 400) {
     logTrip({ start: trip.start, end: { lat: last.lat, lng: last.lng }, startedAt: trip.startedAt, endedAt: Date.now(),
       meters: Math.round(trip.meters), maxMph: Math.round(trip.maxMph), alerts: trip.alerts });

@@ -22,14 +22,14 @@ async function poll() {
 
   document.title = `${d.name} · live drive`;
   if (d.ended) {
-    $('#who').textContent = `${d.name} ${d.arrived ? 'has arrived at' : 'stopped sharing their drive to'} ${d.destLabel || 'their destination'}`;
+    $('#who').textContent = d.dest || d.destLabel ? `${d.name} ${d.arrived ? 'has arrived at' : 'stopped sharing their drive to'} ${d.destLabel || 'their destination'}` : `${d.name} stopped sharing their location`;
     $('#eta').textContent = d.arrived ? 'Arrived' : 'Sharing stopped';
     $('#eta').className = 'eta done';
     $('#meta').textContent = `at ${clock(d.updatedAt)}`;
     clearInterval(timer);
   } else {
     const left = d.eta ? Math.max(0, Math.round((d.eta - Date.now()) / 60000)) : null;
-    $('#who').innerHTML = `${esc(d.name)} is driving to <b>${esc(d.destLabel || 'their destination')}</b>`;
+    $('#who').innerHTML = d.dest || d.destLabel ? `${esc(d.name)} is driving to <b>${esc(d.destLabel || 'their destination')}</b>` : `${esc(d.name)} is sharing their <b>live location</b>`;
     $('#eta').textContent = d.eta ? `Arriving ~${clock(d.eta)}` : 'On the way';
     const late = d.arriveBy && d.eta && d.eta > d.arriveBy + 60000;
     $('#meta').innerHTML = `${left != null ? `${left} min away · ` : ''}${late ? `<span class="bad">${Math.round((d.eta - d.arriveBy) / 60000)} min behind schedule</span> · ` : ''}updated ${ago(d.updatedAt)}`;

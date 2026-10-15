@@ -111,13 +111,46 @@ export async function listen() {
 }
 
 // ---------------------------------------------------------------- keep screen on
-let wake = null;
-export async function keepAwake(on) {
+// Reasons stack up ('app' while the app is open, 'drive' while driving) so ending a drive never lets the
+// screen sleep while the app itself still wants it on. Uses the Screen Wake Lock API, and on phones without
+// it (older iPhones) a tiny silent video that loops in the background, which also keeps the screen awake.
+let wake = null, video = null;
+const reasons = new Set();
+async function applyAwake() {
+  const want = reasons.size > 0;
   const KA = P('KeepAwake');
-  if (KA) { try { on ? await KA.keepAwake() : await KA.allowSleep(); } catch { /* ignore */ } return; }
+  if (KA) { try { want ? await KA.keepAwake() : await KA.allowSleep(); } catch { /* ignore */ } return; }
+  if ('wakeLock' in navigator) {
+    try {
+      if (want && !wake && document.visibilityState === 'visible') {
+        wake = await navigator.wakeLock.request('screen');
+        wake.addEventListener('release', () => { wake = null; });       // the phone releases it when the app goes to the background
+      }
+      if (!want && wake) { await wake.release(); wake = null; }
+      return;
+    } catch { /* fall through to the video fallback */ }
+  }
   try {
-    if (on && 'wakeLock' in navigator) wake = await navigator.wakeLock.request('screen');
-    if (!on && wake) { await wake.release(); wake = null; }
-  } catch { /* ignore */ }
+    if (want) {
+      if (!video) {
+        video = document.createElement('video');
+        Object.assign(video, { src: 'vendor/awake.mp4', loop: true, muted: true, playsInline: true, preload: 'auto' });
+        video.setAttribute('playsinline', ''); video.setAttribute('muted', '');
+        video.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-9px;top:-9px';
+        document.body.appendChild(video);
+      }
+      await video.play();
+    } else if (video) { video.pause(); }
+  } catch { /* needs a tap first; retried on the next interaction */ }
 }
-document.addEventListener('visibilitychange', () => { if (wake === null && document.visibilityState === 'visible' && keepAwake.wanted) keepAwake(true); });
+export async function keepAwake(on, reason = 'drive') {
+  if (on) reasons.add(reason); else reasons.delete(reason);
+  keepAwake.wanted = reasons.size > 0;
+  await applyAwake();
+}
+keepAwake.wanted = false;
+export const screenHeld = () => !!wake || !!(video && !video.paused);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && keepAwake.wanted) applyAwake(); });
+// Media playback and some wake locks need a user gesture first: retry on the first few taps
+let tapTries = 0;
+document.addEventListener('pointerdown', () => { if (keepAwake.wanted && !screenHeld() && tapTries++ < 8) applyAwake(); }, { passive: true });
