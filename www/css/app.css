@@ -411,3 +411,12 @@ body.driving #livepill{top:120px}
 /* Sign-in gate: nothing but the Account page until signed in */
 body.gated nav, body.gated #driveBtn, body.gated .maptools, body.gated .mapsearch, body.gated .pagehead .back{display:none !important}
 body.gated main{padding-bottom:16px}
+
+/* Sign-in panel docked over the map while signed out */
+#gate{position:absolute;left:10px;right:10px;bottom:12px;z-index:800;max-width:520px;margin:0 auto;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px 14px 12px;box-shadow:0 10px 30px rgba(0,0,0,.35);max-height:72vh;overflow:auto}
+#gate .gatehead{display:flex;flex-direction:column;gap:2px;margin-bottom:10px}
+#gate .gatehead b{font:800 20px/1.1 var(--display)}
+#gate .gatehead span{font-size:13px;color:var(--muted)}
+#gate .seg.small{margin:0 0 8px}
+#gate form .btns{margin-top:6px}
+body.gated .legend,body.gated #speedo,body.gated #compass{display:none !important}

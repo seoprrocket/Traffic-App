@@ -4,7 +4,7 @@ import { $, $$, esc, money, stamp, today, toast, download, csv, bus } from './ut
 import { pageHead, bindBack, openSheet, closeSheet, head, atOpts, confirmDel, busy, go } from './ui.js';
 import { raise, playSamples } from './engine.js';
 import { unlockAudio } from './native.js';
-import { cloudConfigured, usingOverride, sendCode, verifyCode, signOut, syncNow, saveProfile, deleteAccount, loadOfficialCameras, signInPassword, signUpPassword, resetPassword, updatePassword, sendSms, verifySms, e164 } from './cloud.js';
+import { cloudConfigured, usingOverride, sendCode, verifyCode, signOut, syncNow, saveProfile, deleteAccount, loadOfficialCameras, signInPassword, signUpPassword, resetPassword, updatePassword, sendSms, verifySms, e164, SESSION_DAYS, sessionEndsAt } from './cloud.js';
 import { summary } from './pages-main.js';
 import { pushState, enablePush, disablePush, testPush, pushTrip } from './netlify.js';
 import { CAR_STYLES, CAR_COLORS, carSvg } from './cars.js';
@@ -66,19 +66,9 @@ export function renderProfile() {
 // ---------------------------------------------------------------- Account
 let codeFor = null, method = localStorage.getItem('tr.signin') || 'password', smsFor = null;
 const whoAmI = () => S.user?.email || (S.user?.phone ? '+' + String(S.user.phone).replace(/^\+/, '') : 'your account');
-export function renderAccount() {
-  const host = $('#p-account');
-  const out = S.db.outbox.length;
-  host.innerHTML = `${pageHead('Account', 'Sync across devices and share with other drivers')}
-    ${!cloudConfigured ? `<div class="card"><h2>Backend not connected</h2><p class="note" style="margin:0">This copy of the app isn't connected to Supabase yet, so everything stays on this phone and the AI features are off. Open the <a href="setup.html">setup dashboard</a> to connect it step by step.</p></div>`
-    : (usingOverride ? `<div class="privacy">This phone is connected through the <a href="setup.html">setup dashboard</a> only. Deploy config.js so everyone's app connects.</div>` : '') +
-      (S.user ? `<div class="card sec"><h2>Signed in</h2><p style="margin:0"><b>${esc(whoAmI())}</b></p>
-        <p class="note" style="margin:0">${out ? `${out} change${out > 1 ? 's' : ''} waiting to sync.` : 'Everything is synced.'} Last sync ${S.db.lastPull ? stamp(S.db.lastPull) : 'never'}.</p>
-        <div class="btns"><button class="btn" id="ac-sync">Sync now</button><button class="btn" id="ac-pw">${S.user.email ? 'Set or change password' : 'Add a password'}</button><button class="btn" id="ac-out">Sign out</button></div>
-        <p class="note small" style="margin:0">You stay signed in on this phone until you tap Sign out. With a password set, signing in on another phone takes just your email and password.</p></div>
-      <div class="card sec"><h2>Delete account</h2><p class="note" style="margin:0">Permanently deletes your account and everything stored on the server: tickets, routes, drive history and reports. This can't be undone. Export a backup first if you want to keep a copy.</p>
-        <div class="btns"><button class="btn danger" id="ac-del">Delete my account</button></div></div>`
-    : `${document.body.classList.contains('gated') ? '<div class="privacy" style="margin-bottom:10px"><b>Welcome to Invictus Traffic Radar.</b> Sign in or create an account to continue — your tickets, cameras, saved places and settings follow you to any phone.</div>' : ''}<div class="card sec"><h2>Sign in or create an account</h2>
+/** The sign-in / create-account form (used by the Account page and the sign-in panel on the map). */
+export function signInHtml(compact = false) {
+  return `${compact ? '' : document.body.classList.contains('gated') ? '<div class="privacy" style="margin-bottom:10px"><b>Welcome to Invictus Traffic Radar.</b> Sign in or create an account to continue — your tickets, cameras, saved places and settings follow you to any phone.</div>' : ''}${compact ? '<div class="sec">' : '<div class="card sec"><h2>Sign in or create an account</h2>'}
         ${(() => { const n = S.db.tickets.filter((t) => !t.example).length; return n ? `<div class="privacy">📍 <b>${n} ticket location${n === 1 ? '' : 's'}</b> saved on this phone. They upload to your account when you sign in.</div>` : ''; })()}
         <div class="seg small" id="ac-method"><button data-m="password" aria-pressed="${method === 'password'}">Email &amp; password</button><button data-m="link" aria-pressed="${method === 'link'}">Email link</button><button data-m="phone" aria-pressed="${method === 'phone'}">Phone (text)</button></div>
         ${method === 'password' ? `<form id="ac-pwform">
@@ -87,7 +77,7 @@ export function renderAccount() {
           <div class="btns"><button class="btn primary" type="submit" id="ac-go">Sign in</button><button class="btn" type="button" id="ac-signup">Create account</button><button class="btn" type="button" id="ac-forgot">Forgot password?</button></div>
           <p class="note small" style="margin:0">Signed in with an email link before? Tap "Forgot password?" once to set a password for that same account.</p></form>`
         : method === 'phone' ? `<form id="ac-smsform">
-          <p class="note" style="margin:0">${smsFor ? `We texted a code to <b>${esc(smsFor)}</b>.` : 'We\'ll text you a 6-digit code. Standard message rates apply.'}</p>
+          <p class="note" style="margin:0">${smsFor ? `Enter the 6-digit code for <b>${esc(smsFor)}</b> — the one we texted you, or your set code if this number was added without texting.` : 'Enter your number, then the 6-digit code: texted to you, or the fixed code set for your number.'}</p>
           <label class="f">Mobile number<input type="tel" id="ac-phone" required autocomplete="tel" inputmode="tel" placeholder="(240) 555-0123" value="${esc(smsFor || '')}"></label>
           ${smsFor ? '<label class="f">Code from the text<input type="text" id="ac-smscode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required></label>' : ''}
           <div class="btns"><button class="btn primary" type="submit" id="ac-go">${smsFor ? 'Sign in with code' : 'Text me a code'}</button>${smsFor ? '<button class="btn" type="button" id="ac-smsrestart">Use a different number</button>' : ''}</div></form>`
@@ -97,18 +87,12 @@ export function renderAccount() {
           <label class="f">Email<input type="email" id="ac-email" required autocomplete="email" value="${esc(codeFor || '')}"></label>
           ${codeFor ? '<label class="f">Code from the email (if it shows one)<input type="text" id="ac-code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required></label>' : ''}
           <div class="btns"><button class="btn primary" type="submit" id="ac-go">${codeFor ? 'Sign in with code' : 'Email me a sign-in link'}</button>${codeFor ? '<button class="btn" type="button" id="ac-restart">Use a different email</button>' : ''}</div></form>`}
-        <p class="note" style="margin:0">By continuing you agree to the <a href="#terms">Terms</a> and <a href="#privacy">Privacy Policy</a>.</p></div>`)}
-    <div class="btns"><a class="btn" href="#privacy">Privacy Policy</a><a class="btn" href="#terms">Terms of Use</a></div>`;
-  host.querySelector('#ac-sync')?.addEventListener('click', async (e) => { busy(e.currentTarget, true, 'Syncing…'); await syncNow(); await loadOfficialCameras(true); renderAccount(); toast('Synced'); });
-  host.querySelector('#ac-out')?.addEventListener('click', async () => { await signOut(); renderAccount(); toast('Signed out. Your data stays on this phone.'); });
-  const del = host.querySelector('#ac-del');
-  del?.addEventListener('click', () => confirmDel(del, async () => {
-    busy(del, true, 'Deleting…');
-    try { await deleteAccount(); toast('Your account was deleted'); go('map'); } catch (err) { toast(err.message); busy(del, false); }
-  }));
-  host.querySelector('#ac-restart')?.addEventListener('click', () => { codeFor = null; renderAccount(); });
-  host.querySelector('#ac-smsrestart')?.addEventListener('click', () => { smsFor = null; renderAccount(); });
-  $$('#ac-method button', host).forEach((b) => (b.onclick = () => { method = b.dataset.m; localStorage.setItem('tr.signin', method); renderAccount(); }));
+        ${compact ? '' : '<p class="note" style="margin:0">By continuing you agree to the <a href="#terms">Terms</a> and <a href="#privacy">Privacy Policy</a>.</p>'}</div>`;
+}
+export function bindSignIn(host, rerender) {
+  host.querySelector('#ac-restart')?.addEventListener('click', () => { codeFor = null; rerender(); });
+  host.querySelector('#ac-smsrestart')?.addEventListener('click', () => { smsFor = null; rerender(); });
+  $$('#ac-method button', host).forEach((b) => (b.onclick = () => { method = b.dataset.m; localStorage.setItem('tr.signin', method); rerender(); }));
   host.querySelector('#ac-pw')?.addEventListener('click', () => passwordSheet());
   const done = () => { codeFor = null; smsFor = null; if (!S.db.acceptedTerms) S.db.acceptedTerms = Date.now(); persist(); toast('Signed in. Syncing your data…'); go(S.view === 'map' ? 'map' : 'more'); };   // the sign-in gate already moved to the map
   host.querySelector('#ac-pwform')?.addEventListener('submit', async (e) => {
@@ -136,7 +120,7 @@ export function renderAccount() {
     const phone = e164(host.querySelector('#ac-phone').value);
     if (!phone) { toast('Enter a 10-digit mobile number'); busy(b, false); return; }
     try {
-      if (!smsFor) { await sendSms(phone); smsFor = phone; renderAccount(); toast('Sent. Check your messages.'); }
+      if (!smsFor) { await sendSms(phone); smsFor = phone; rerender(); toast('Sent. Check your messages.'); }
       else { await verifySms(phone, host.querySelector('#ac-smscode').value.trim()); done(); }
     } catch (err) { toast(err.message, 7000); busy(b, false); }
   });
@@ -144,10 +128,34 @@ export function renderAccount() {
     e.preventDefault(); const b = host.querySelector('#ac-go'); busy(b, true);
     const email = host.querySelector('#ac-email').value.trim();
     try {
-      if (!codeFor) { await sendCode(email); codeFor = email; renderAccount(); toast('Sent. Check your email.'); }
+      if (!codeFor) { await sendCode(email); codeFor = email; rerender(); toast('Sent. Check your email.'); }
       else { await verifyCode(email, host.querySelector('#ac-code').value.trim()); codeFor = null; if (!S.db.acceptedTerms) S.db.acceptedTerms = Date.now(); persist(); toast('Signed in. Syncing your data…'); go('more'); }
     } catch (err) { toast(err.message); busy(b, false); }
   });
+}
+
+export function renderAccount() {
+  const host = $('#p-account');
+  const out = S.db.outbox.length;
+  host.innerHTML = `${pageHead('Account', 'Sync across devices and share with other drivers')}
+    ${!cloudConfigured ? `<div class="card"><h2>Backend not connected</h2><p class="note" style="margin:0">This copy of the app isn't connected to Supabase yet, so everything stays on this phone and the AI features are off. Open the <a href="setup.html">setup dashboard</a> to connect it step by step.</p></div>`
+    : (usingOverride ? `<div class="privacy">This phone is connected through the <a href="setup.html">setup dashboard</a> only. Deploy config.js so everyone's app connects.</div>` : '') +
+      (S.user ? `<div class="card sec"><h2>Signed in</h2><p style="margin:0"><b>${esc(whoAmI())}</b></p>
+        <p class="note" style="margin:0">${out ? `${out} change${out > 1 ? 's' : ''} waiting to sync.` : 'Everything is synced.'} Last sync ${S.db.lastPull ? stamp(S.db.lastPull) : 'never'}.</p>
+        <div class="btns"><button class="btn" id="ac-sync">Sync now</button><button class="btn" id="ac-pw">${S.user.email ? 'Set or change password' : 'Add a password'}</button><button class="btn" id="ac-out">Sign out</button></div>
+        <p class="note small" style="margin:0">You stay signed in on this phone for ${SESSION_DAYS} days${sessionEndsAt() ? ' (until ' + new Date(sessionEndsAt()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ')' : ''}, or until you tap Sign out. With a password set, signing in again takes just your email and password.</p></div>
+      <div class="card sec"><h2>Delete account</h2><p class="note" style="margin:0">Permanently deletes your account and everything stored on the server: tickets, routes, drive history and reports. This can't be undone. Export a backup first if you want to keep a copy.</p>
+        <div class="btns"><button class="btn danger" id="ac-del">Delete my account</button></div></div>`
+    : signInHtml())}
+    <div class="btns"><a class="btn" href="#privacy">Privacy Policy</a><a class="btn" href="#terms">Terms of Use</a></div>`;
+  host.querySelector('#ac-sync')?.addEventListener('click', async (e) => { busy(e.currentTarget, true, 'Syncing…'); await syncNow(); await loadOfficialCameras(true); renderAccount(); toast('Synced'); });
+  host.querySelector('#ac-out')?.addEventListener('click', async () => { await signOut(); renderAccount(); toast('Signed out. Your data stays on this phone.'); });
+  const del = host.querySelector('#ac-del');
+  del?.addEventListener('click', () => confirmDel(del, async () => {
+    busy(del, true, 'Deleting…');
+    try { await deleteAccount(); toast('Your account was deleted'); go('map'); } catch (err) { toast(err.message); busy(del, false); }
+  }));
+  bindSignIn(host, renderAccount);
   bindBack(host);
 }
 

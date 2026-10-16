@@ -1,6 +1,6 @@
 // Sets up Supabase for Invictus Traffic Radar using the Supabase Management API.
 // Runs inside the GitHub Action (.github/workflows/supabase.yml); no database password or terminal needed.
-//   node scripts/supabase-setup.mjs check | database | secrets | schedules
+//   node scripts/supabase-setup.mjs check | database | secrets | schedules | phone
 import { readFileSync, appendFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 
@@ -68,6 +68,32 @@ const steps = {
       else perform vault.create_secret(${lit(cron)}, 'cron_secret'); end if;
     end $$;`);
     note(`✅ Keys saved to Supabase: ${list.map((x) => x.name).join(', ')}`);
+  },
+
+  /** Phone sign-in with no texting bill: each number in PHONE_LOGINS gets a fixed 6-digit code (Supabase "test OTPs").
+   *  PHONE_LOGINS = "+12405550123=123456, +13015550199=654321" (commas or new lines). Real Twilio texting, if ever set up in the
+   *  dashboard, is left untouched; numbers not on the list fall through to it. */
+  async phone() {
+    const raw = (process.env.PHONE_LOGINS || '').trim();
+    if (!raw) { note('ℹ️ PHONE_LOGINS not set: phone sign-in without texting stays as it is. Add the secret (number=code, one per line) to turn it on.'); return; }
+    const entries = [];
+    for (const part of raw.split(/[\n,;]+/)) {
+      const m = /^\s*(\+?[\d\s().-]{10,18})\s*=\s*(\d{6})\s*$/.exec(part); if (!m) { if (part.trim()) note(`⚠️ Skipped "${part.trim().replace(/\d(?=\d{4})/g, '•')}" — use +1XXXXXXXXXX=123456`); continue; }
+      let d = m[1].replace(/\D/g, ''); if (d.length === 10) d = '1' + d;
+      entries.push([d, m[2]]);
+    }
+    if (!entries.length) fail('PHONE_LOGINS has no usable entries. Format: +12405550123=123456');
+    const cfg = await call(`/v1/projects/${REF}/config/auth`);
+    const list = entries.flatMap(([d, c]) => [`${d}:${c}`, `+${d}:${c}`]).join(',');   // Supabase format: phone:code,phone:code — both spellings so it matches however the number is stored
+    const patch = {
+      external_phone_enabled: true,
+      sms_provider: cfg.sms_provider || 'twilio',
+      sms_test_otp: list,
+      sms_otp_length: 6,
+    };
+    if ((patch.sms_provider === 'twilio') && !cfg.sms_twilio_account_sid) Object.assign(patch, { sms_twilio_account_sid: 'ACnotconfigured', sms_twilio_auth_token: 'notconfigured', sms_twilio_message_service_sid: 'notconfigured' });
+    await call(`/v1/projects/${REF}/config/auth`, { method: 'PATCH', body: JSON.stringify(patch) });
+    note(`✅ Phone sign-in without texting: ${entries.length} number${entries.length === 1 ? '' : 's'} set (${entries.map(([d]) => '+' + d.replace(/\d(?=\d{4})/g, '•')).join(', ')}). Each signs in with its fixed code; no SMS is sent.`);
   },
 
   async schedules() {

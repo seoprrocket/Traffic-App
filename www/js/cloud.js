@@ -19,19 +19,33 @@ export const sb = cloudConfigured
 // refreshed quietly whenever the app comes back to the foreground or back online. Nothing in the app signs you
 // out on its own; only the Sign out button (or deleting the account) does.
 let leaving = false;                                               // true while *we* are signing out on purpose
+export const SESSION_DAYS = 90;                                    // how long a sign-in lasts on a phone before we ask again
+export const sessionEndsAt = () => (S.db.signedInAt ? S.db.signedInAt + SESSION_DAYS * 86400e3 : null);
 export async function initAuth() {
   if (!sb) return;
   try { if (navigator.storage?.persist) navigator.storage.persist().catch(() => {}); } catch { /* not offered */ }   // ask the phone not to evict the app's storage
   await fromEmailLink();
   const { data } = await sb.auth.getSession();
-  setUser(data.session?.user || null);
+  if (data.session && !S.db.signedInAt) { S.db.signedInAt = Date.now(); persist(); }   // older sessions start their 90 days now
+  if (data.session && Date.now() - S.db.signedInAt > SESSION_DAYS * 86400e3) {        // 90 days since sign-in: ask again
+    leaving = true; try { await sb.auth.signOut(); } finally { leaving = false; }
+    S.db.signedInAt = null; persist();
+    setTimeout(() => toast(`It's been ${SESSION_DAYS} days since you signed in. Please sign in again — everything on this phone is kept.`, 9000), 600);
+  }
+  const { data: d2 } = await sb.auth.getSession();
+  setUser(d2.session?.user || null);
   sb.auth.onAuthStateChange((ev, session) => {
+    if (ev === 'SIGNED_IN' && session) { S.db.signedInAt = Date.now(); persist(); }
     setUser(session?.user || null);
     if (ev === 'PASSWORD_RECOVERY' || (session && recoveryLink)) { recoveryLink = false; setTimeout(() => bus.emit('recovery'), 400); }
     if (ev === 'SIGNED_OUT' && !leaving) setTimeout(() => toast('Your sign-in expired on this phone. Your data is safe here — sign in again (More → Account) to keep syncing.', 9000), 500);
   });
   // Coming back to the app or back online: make sure the token is fresh (the client retries by itself when a refresh fails for lack of network)
-  const refresh = () => { if (document.visibilityState === 'visible') sb.auth.getSession().catch(() => {}); };
+  const refresh = () => {
+    if (document.visibilityState !== 'visible') return;
+    if (S.user && S.db.signedInAt && Date.now() - S.db.signedInAt > SESSION_DAYS * 86400e3) { signOut().then(() => toast(`It's been ${SESSION_DAYS} days since you signed in. Please sign in again.`, 9000)); return; }
+    sb.auth.getSession().catch(() => {});
+  };
   document.addEventListener('visibilitychange', refresh);
   window.addEventListener('online', refresh);
   window.addEventListener('focus', refresh);
@@ -134,6 +148,7 @@ export async function verifySms(phone, token) {
 export async function signOut() {
   leaving = true;
   try { await sb.auth.signOut(); } finally { leaving = false; }
+  S.db.signedInAt = null;
   S.db.outbox = []; S.db.syncedUser = null; S.db.community = []; S.db.communityAt = 0;
   save();
 }

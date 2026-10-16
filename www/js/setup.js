@@ -214,7 +214,15 @@ function steps() {
       </ol>
       ${code('email-tpl', 'Email body for Confirm signup and Magic Link', EMAIL)}
       ${links([['Email templates', dash('auth/templates')], ['URL configuration', dash('auth/url-configuration')], ['Resend', 'https://resend.com']])}
-      <label class="switch"><input type="checkbox" id="in-email" ${S.emailDone ? 'checked' : ''}><span><b>I've updated both email templates</b><small>This page can't read your email settings, so tick this yourself.</small></span></label>` });
+      <label class="switch"><input type="checkbox" id="in-email" ${S.emailDone ? 'checked' : ''}><span><b>I've updated both email templates</b><small>This page can't read your email settings, so tick this yourself.</small></span></label>
+      <h3>Phone sign-in without paying for texts</h3>
+      <p class="small">Real text messages need a paid SMS provider (Twilio). The free alternative: give each phone number a fixed 6-digit code. The app's <b>Phone (text)</b> tab then signs that number in with its code and no text is ever sent — like a phone number plus a PIN. Good for you, family and friends you add by hand.</p>
+      <ol class="small">
+        <li>GitHub → your repo → Settings → Secrets and variables → Actions → <b>New repository secret</b> named <b>PHONE_LOGINS</b>. Value: one line per phone, <span class="mono">+12405550123=123456</span> (pick a code people can't guess).</li>
+        <li>Actions → <b>Set up Supabase and AI</b> → Run workflow. The "Phone sign-in without texting" step turns it on.</li>
+        <li>Or by hand: Supabase → Authentication → Providers → <b>Phone</b> → enable, provider Twilio (any placeholder text in the three fields), and add each number and code under <b>Test phone numbers</b>.</li>
+      </ol>
+      ${links([['GitHub secrets', S.repo ? `https://github.com/${S.repo}/settings/secrets/actions/new` : 'https://github.com/'], ['Run the setup', S.repo ? `https://github.com/${S.repo}/actions/workflows/supabase.yml` : 'https://github.com/'], ['Phone provider', dash('auth/providers')]])}` });
   }
 
   // 5. Connect the live app

@@ -17,7 +17,7 @@ import { reminderTick } from './trip.js';
 import { renderCommunityMap, renderFeed, renderContrib, renderHeat } from './pages-community.js';
 import { renderRoutes, renderCommutes, commuteCheck } from './pages-plan.js';
 import { renderCoach, renderTips, renderDispute } from './pages-learn.js';
-import { renderProfile, renderAccount, renderLog, renderExport, openSettings, termsGate, renderPrivacy, renderTerms } from './pages-you.js';
+import { renderProfile, renderAccount, renderLog, renderExport, openSettings, termsGate, renderPrivacy, renderTerms, signInHtml, bindSignIn } from './pages-you.js';
 import { voiceCommand, showHandsFree, paintHandsFree, setupHandsFree } from './voice.js';
 
 // ---------------------------------------------------------------- Add Location page
@@ -74,14 +74,25 @@ const PAGES = {
   'privacy': { t: 'Privacy Policy', r: renderPrivacy },
   'terms': { t: 'Terms of Use', r: renderTerms },
 };
-// Sign-in required: with the backend connected, the app stays on the Account page until you sign in or create an account
-const GATE_OK = new Set(['account', 'privacy', 'terms']);
+// Sign-in required: with the backend connected, the app opens on the map with a sign-in panel docked over it,
+// and the rest of the app (tabs, drive mode, search) waits until you sign in or create an account.
+const GATE_OK = new Set(['map', 'account', 'privacy', 'terms']);
 export const gated = () => cloudConfigured && !S.user;
+function paintGate() {
+  const on = gated();
+  document.body.classList.toggle('gated', on);
+  let el = $('#gate');
+  if (!on) { el?.remove(); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'gate'; $('#view-map').appendChild(el); }
+  el.innerHTML = `<div class="gatehead"><b>Sign in to start</b><span>Your tickets, cameras, saved places and settings follow you to any phone.</span></div>${signInHtml(true)}
+    <p class="note small" style="margin:6px 0 0">By continuing you agree to the <a href="#terms">Terms</a> and <a href="#privacy">Privacy Policy</a>.</p>`;
+  bindSignIn(el, paintGate);
+}
 export function show(v, push = true) {
   if (PAGES[v]?.act) { PAGES[v].act(); return; }
   if (!TABS.includes(v) && !PAGES[v]) v = 'map';
-  if (gated() && !GATE_OK.has(v)) v = 'account';
-  document.body.classList.toggle('gated', gated());
+  if (gated() && !GATE_OK.has(v)) v = 'map';
+  paintGate();
   S.view = v;
   $$('.view').forEach((el) => (el.hidden = el.id !== 'view-' + v));
   const tab = TABS.includes(v) ? v : 'more';
@@ -126,7 +137,7 @@ bus.on('agents', () => { if (['driving-coach', 'commute-schedules', 'dispute'].i
 bus.on('drive', () => paintEta());
 bus.on('nav-start', () => showHandsFree(false));
 bus.on('log', debounce(() => { if (S.view === 'alert-log') renderLog(); }, 300));
-bus.on('auth', (u) => { loadOfficialCameras(true); rerender(); document.body.classList.toggle('gated', gated()); if (u && S.view === 'account') show('map'); else if (!u) show('account'); });
+bus.on('auth', (u) => { loadOfficialCameras(true); rerender(); paintGate(); if (u && S.view === 'account') show('map'); else if (!u) show('map'); });
 bus.on('outbox', debounce(() => flush(), 1500));
 bus.on('vote', (id, v) => vote(id, v));
 bus.on('ticket-from-camera', (id) => ticketFromCamera(allCameras().find((c) => c.id === id) || S.db.official.find((c) => c.id === id)));
