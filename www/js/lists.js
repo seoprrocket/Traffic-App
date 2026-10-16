@@ -198,7 +198,17 @@ function setHomeWorkSheet(which) {
 export function handleJoinHash() {
   const m = /join=([A-Za-z0-9]{6,12})/.exec(location.hash); if (!m) return false;
   history.replaceState(null, '', location.pathname);
+  const code = m[1].toUpperCase();
+  if (!S.user) {                                                  // sign in first; the join finishes right after
+    try { sessionStorage.setItem('tr.join', code); } catch { /* private mode */ }
+    go('account'); setTimeout(() => toast(`Sign in or create an account to join the shared list (code ${code}).`, 7000), 300);
+    return true;
+  }
   go('saved');
-  setTimeout(() => joinSheet(renderSaved, m[1].toUpperCase()), 200);
+  setTimeout(() => joinSheet(renderSaved, code), 200);
   return true;
 }
+bus.on('auth', (u) => {
+  let code = null; try { code = sessionStorage.getItem('tr.join'); } catch { /* none */ }
+  if (u && code) { try { sessionStorage.removeItem('tr.join'); } catch { /* none */ } setTimeout(() => { go('saved'); joinSheet(renderSaved, code); }, 600); }
+});

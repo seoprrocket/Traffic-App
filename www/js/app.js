@@ -74,9 +74,14 @@ const PAGES = {
   'privacy': { t: 'Privacy Policy', r: renderPrivacy },
   'terms': { t: 'Terms of Use', r: renderTerms },
 };
+// Sign-in required: with the backend connected, the app stays on the Account page until you sign in or create an account
+const GATE_OK = new Set(['account', 'privacy', 'terms']);
+export const gated = () => cloudConfigured && !S.user;
 export function show(v, push = true) {
   if (PAGES[v]?.act) { PAGES[v].act(); return; }
   if (!TABS.includes(v) && !PAGES[v]) v = 'map';
+  if (gated() && !GATE_OK.has(v)) v = 'account';
+  document.body.classList.toggle('gated', gated());
   S.view = v;
   $$('.view').forEach((el) => (el.hidden = el.id !== 'view-' + v));
   const tab = TABS.includes(v) ? v : 'more';
@@ -121,7 +126,7 @@ bus.on('agents', () => { if (['driving-coach', 'commute-schedules', 'dispute'].i
 bus.on('drive', () => paintEta());
 bus.on('nav-start', () => showHandsFree(false));
 bus.on('log', debounce(() => { if (S.view === 'alert-log') renderLog(); }, 300));
-bus.on('auth', () => { loadOfficialCameras(true); rerender(); });
+bus.on('auth', (u) => { loadOfficialCameras(true); rerender(); document.body.classList.toggle('gated', gated()); if (u && S.view === 'account') show('map'); else if (!u) show('account'); });
 bus.on('outbox', debounce(() => flush(), 1500));
 bus.on('vote', (id, v) => vote(id, v));
 bus.on('ticket-from-camera', (id) => ticketFromCamera(allCameras().find((c) => c.id === id) || S.db.official.find((c) => c.id === id)));
@@ -162,10 +167,10 @@ $('#compass').onclick = () => toast(E.heading == null ? 'True north is up on the
   bus.on('change', () => keepAwake(S.db.settings.screenOn !== 'driving', 'app'));
   drawMarkers();
   drawSaved();
+  await initAuth();                                             // know who's signed in before the first screen shows
   if (!handleJoinHash()) show(location.hash.slice(1) || 'map', false);
   setInterval(reminderTick, 30000);
   setTimeout(() => fitAll(null), 150);
-  await initAuth();
   loadOfficialCameras();
   termsGate();
   if (!isNative && location.protocol !== 'https:' && !/^(localhost|127\.)/.test(location.hostname)) setTimeout(() => toast('Open this app over https so GPS alerts work'), 900);

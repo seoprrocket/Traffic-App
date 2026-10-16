@@ -2,7 +2,7 @@
 // If no Supabase project is configured, the app runs fully on the phone.
 import { S, persist, save, queue, normalize } from './store.js';
 import { bus, toast, scrub } from './util.js';
-import { loadAllPublic, loadMoCo, loadPG } from './sources.js';
+import { loadAllPublic, loadMoCo, loadPG, loadArlington, loadOSM } from './sources.js';
 
 // The setup page can connect just this device before config.js is deployed ("Use on this device")
 let override = null;
@@ -15,12 +15,27 @@ export const sb = cloudConfigured
   : null;
 
 // ---------------------------------------------------------------- auth
+// Stay signed in until "Sign out": the session (with its refresh token) lives in this phone's storage and is
+// refreshed quietly whenever the app comes back to the foreground or back online. Nothing in the app signs you
+// out on its own; only the Sign out button (or deleting the account) does.
+let leaving = false;                                               // true while *we* are signing out on purpose
 export async function initAuth() {
   if (!sb) return;
+  try { if (navigator.storage?.persist) navigator.storage.persist().catch(() => {}); } catch { /* not offered */ }   // ask the phone not to evict the app's storage
   await fromEmailLink();
   const { data } = await sb.auth.getSession();
   setUser(data.session?.user || null);
-  sb.auth.onAuthStateChange((_e, session) => setUser(session?.user || null));
+  sb.auth.onAuthStateChange((ev, session) => {
+    setUser(session?.user || null);
+    if (ev === 'PASSWORD_RECOVERY' || (session && recoveryLink)) { recoveryLink = false; setTimeout(() => bus.emit('recovery'), 400); }
+    if (ev === 'SIGNED_OUT' && !leaving) setTimeout(() => toast('Your sign-in expired on this phone. Your data is safe here — sign in again (More → Account) to keep syncing.', 9000), 500);
+  });
+  // Coming back to the app or back online: make sure the token is fresh (the client retries by itself when a refresh fails for lack of network)
+  const refresh = () => { if (document.visibilityState === 'visible') sb.auth.getSession().catch(() => {}); };
+  document.addEventListener('visibilitychange', refresh);
+  window.addEventListener('online', refresh);
+  window.addEventListener('focus', refresh);
+  setInterval(refresh, 20 * 60000);
 }
 function setUser(u) {
   const changed = (S.user?.id || null) !== (u?.id || null);
@@ -31,8 +46,10 @@ function setUser(u) {
   }
 }
 /** Signing in by tapping the link in the email: the link comes back to the app with the session in the address. */
+let recoveryLink = false;
 async function fromEmailLink() {
   const h = new URLSearchParams(location.hash.replace(/^#/, ''));
+  if (h.get('type') === 'recovery') recoveryLink = true;
   const q = new URLSearchParams(location.search);
   const clean = () => history.replaceState(null, '', location.pathname + '#account');
   try {
@@ -62,8 +79,61 @@ export async function verifyCode(email, token) {
   const { error } = await sb.auth.verifyOtp({ email, token, type: 'email' });
   if (error) throw new Error(error.message.includes('expired') ? 'That code expired. Send a new one.' : 'That code didn\'t work. Check it and try again.');
 }
+// ---- Email + password ------------------------------------------------------
+const friendly = (e) => {
+  const m = e?.message || '';
+  if (/invalid login credentials/i.test(m)) return 'Wrong email or password. If you signed up with an email link before, use "Forgot password" to set one.';
+  if (/email not confirmed/i.test(m)) return 'Confirm your email first: tap the link we sent you, then sign in.';
+  if (/already registered|already been registered/i.test(m)) return 'That email already has an account. Sign in, or use "Forgot password".';
+  if (/password should be|at least/i.test(m)) return 'Use a longer password (8 characters or more).';
+  if (/rate limit|too many/i.test(m)) return 'Too many tries. Wait a few minutes and try again.';
+  if (/signups not allowed|disabled/i.test(m)) return 'Sign-ups are turned off for this app right now.';
+  return m || 'Something went wrong';
+};
+export async function signInPassword(email, password) {
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) throw new Error(friendly(error));
+}
+/** Create an account with a password. Returns true when the account is live right away, false when an email confirmation is needed first. */
+export async function signUpPassword(email, password) {
+  const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } });
+  if (error) throw new Error(friendly(error));
+  if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) throw new Error('That email already has an account. Sign in, or use "Forgot password".');
+  return !!data.session;
+}
+export async function resetPassword(email) {
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+  if (error) throw new Error(friendly(error));
+}
+export async function updatePassword(password) {
+  const { error } = await sb.auth.updateUser({ password });
+  if (error) throw new Error(friendly(error));
+}
+// ---- Phone (text message code) ----------------------------------------------
+export function e164(raw) {
+  const d = String(raw || '').replace(/\D/g, '');
+  if (d.length === 10) return '+1' + d;                       // US / Canada
+  if (d.length === 11 && d.startsWith('1')) return '+' + d;
+  if (String(raw).trim().startsWith('+') && d.length >= 8) return '+' + d;
+  return null;
+}
+const phoneErr = (e) => {
+  const m = e?.message || '';
+  if (/provider|not enabled|disabled|unsupported|sms/i.test(m) && !/invalid|expired/i.test(m)) return 'Text-message sign-in isn\'t switched on for this app yet. It needs an SMS provider (Twilio) in Supabase → Authentication → Providers → Phone.';
+  if (/rate limit|too many/i.test(m)) return 'Too many codes requested. Wait a few minutes.';
+  return m || 'Something went wrong';
+};
+export async function sendSms(phone) {
+  const { error } = await sb.auth.signInWithOtp({ phone, options: { shouldCreateUser: true } });
+  if (error) throw new Error(phoneErr(error));
+}
+export async function verifySms(phone, token) {
+  const { error } = await sb.auth.verifyOtp({ phone, token, type: 'sms' });
+  if (error) throw new Error(/expired/i.test(error.message) ? 'That code expired. Text me a new one.' : /invalid|incorrect/i.test(error.message) ? 'That code didn\'t match. Check it and try again.' : phoneErr(error));
+}
 export async function signOut() {
-  await sb.auth.signOut();
+  leaving = true;
+  try { await sb.auth.signOut(); } finally { leaving = false; }
   S.db.outbox = []; S.db.syncedUser = null; S.db.community = []; S.db.communityAt = 0;
   save();
 }
@@ -237,7 +307,14 @@ export async function loadOfficialCameras(force) {
         const add = [];
         if (!has(/montgomery/i)) add.push(loadMoCo());
         if (!has(/prince george/i)) add.push(loadPG());
+        if (!has(/arlington/i)) add.push(loadArlington());
         if (add.length) { const md = await Promise.allSettled(add); list.push(...md.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))); }
+        // Virginia and the rest of Maryland come from OpenStreetMap until the server has synced them (a big query: reuse yesterday's copy)
+        if (!list.some((c) => c.source === 'osm')) {
+          const cached = S.db.official.filter((c) => c.source === 'osm');
+          if (cached.length && Date.now() - (S.db.osmAt || 0) < 24 * 3600e3) list.push(...cached);
+          else { try { list.push(...await loadOSM(list)); S.db.osmAt = Date.now(); } catch (e) { console.warn('OpenStreetMap cameras failed:', e?.message || e); list.push(...cached); } }
+        }
       }
     }
     if (!list) list = await loadAllPublic();
@@ -295,7 +372,7 @@ export async function loadAgentOutputs() {
 }
 export async function deleteAccount() {
   await agent('delete-account', { confirm: 'DELETE' });
-  await sb.auth.signOut();
+  leaving = true; await sb.auth.signOut(); leaving = false;
   localStorage.clear();
   S.db = normalize({}); save();
 }

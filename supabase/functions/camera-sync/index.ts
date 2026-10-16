@@ -1,9 +1,10 @@
 // Agent 2 — Camera data
 // Runs daily. Pulls the official camera lists that publish exact locations (DC, Montgomery County,
-// Prince George's County), then reads other county/town web pages listed in camera_sources.
+// Prince George's County), every enforcement camera mapped in OpenStreetMap across Maryland, DC and
+// Virginia, then reads other county/town web pages listed in camera_sources.
 import { serve, requireCron, admin } from "../_shared/http.ts";
 import { askStructured, SMART_MODEL, claudeConfigured } from "../_shared/claude.ts";
-import { geocode, parseHeading, dist } from "../_shared/geo.ts";
+import { geocode, parseHeading, dist, jurisdictionAt } from "../_shared/geo.ts";
 
 const DC_LAYER = "https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Public_Safety_WebMercator/MapServer/43/query";
 const KIND: Record<string, string> = {
@@ -122,6 +123,133 @@ async function syncPG() {
   return store("Prince George's County", "md_open_data", "Prince George's County, MD", rows, runAt);
 }
 
+// ---------------------------------------------------------------- Arlington County, VA: open-data layers with exact points
+const ARL = "https://arlgis.arlingtonva.us/arcgis/rest/services/Open_Data/";
+async function arlLayer(service: string) {
+  const url = `${ARL}${service}/MapServer/0/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&f=json&resultRecordCount=2000`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Arlington ${service} ${r.status}`);
+  const js = await r.json();
+  if (js.error) throw new Error(`Arlington ${service}: ${js.error.message}`);
+  return (js.features ?? []) as { attributes: Record<string, unknown>; geometry?: { x: number; y: number } }[];
+}
+const title = (s: unknown) => String(s ?? "").trim().toLowerCase().replace(/\b([a-z])/g, (c) => c.toUpperCase()).replace(/\b(Nb|Sb|Eb|Wb|Ne|Nw|Se|Sw)\b/g, (m) => m.toUpperCase());
+async function syncArlington() {
+  const runAt = new Date().toISOString();
+  const rows: Row[] = [];
+  for (const f of await arlLayer("od_DES_Signal_PhotoSpeed_Cameras_pnt")) {
+    const a = f.attributes; if (!f.geometry || a.Retired || (a.Active && !/^y/i.test(String(a.Active)))) continue;
+    const limit = parseInt(String(a.BeaconSpeedLimit ?? a.NonSchoolSpeedLimit ?? ""), 10);
+    rows.push({ ...base(runAt), source: "arlington_open_data", source_ref: `speed-${a.ID ?? a.OBJECTID}`, jurisdiction: "Arlington County, VA",
+      name: `${title(a.Street)}${a.School ? " @ " + title(a.School) : ""}${a.Direction ? " " + String(a.Direction).toUpperCase().replace(/B$/, "/B") : ""} (school zone)`,
+      lat: f.geometry.y, lng: f.geometry.x, kind: "Speed", speed_limit: Number.isFinite(limit) ? limit : null, heading: parseHeading(String(a.Direction ?? "")) });
+  }
+  for (const f of await arlLayer("od_DES_Signal_PhotoRED_Cameras_pnt")) {
+    const a = f.attributes; if (!f.geometry || a.Retired) continue;
+    rows.push({ ...base(runAt), source: "arlington_open_data", source_ref: `red-${a.ID ?? a.OBJECTID}`, jurisdiction: "Arlington County, VA",
+      name: `${title(a.Street)}${a.IntersectingStreet ? " & " + title(a.IntersectingStreet) : ""}${a.Direction ? " " + String(a.Direction).toUpperCase().replace(/B$/, "/B") : ""}`,
+      lat: f.geometry.y, lng: f.geometry.x, kind: "Red light", speed_limit: null, heading: parseHeading(String(a.Direction ?? "")) });
+  }
+  return store("Arlington County", "arlington_open_data", "Arlington County, VA", rows, runAt);
+}
+
+// ---------------------------------------------------------------- OpenStreetMap: the whole DMV
+// Every speed / red-light enforcement camera mapped in OSM inside Maryland, DC and Virginia. Fills in
+// Virginia and the Maryland counties that publish no machine-readable list. Named after the nearest
+// named road; labelled with the county or city it sits in; skipped where an official source already
+// has a camera within 60 m (so DC's own list wins).
+const DMV_BBOX = "36.50,-83.70,39.75,-75.00";
+const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
+const CARD: Record<string, number> = { N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315, NORTH: 0, NORTHEAST: 45, EAST: 90, SOUTHEAST: 135, SOUTH: 180, SOUTHWEST: 225, WEST: 270, NORTHWEST: 315 };
+function osmHeading(t: Record<string, string>) {
+  const d = (t.direction ?? t["camera:direction"] ?? "").trim().toUpperCase();
+  if (!d) return parseHeading(t.description ?? t.name);
+  if (/^\d+(\.\d+)?$/.test(d)) return Math.round(+d) % 360;
+  const first = d.split(/[;,-]/)[0].trim();
+  return CARD[first] ?? parseHeading(d);
+}
+function osmLimit(t: Record<string, string>) {
+  const m = /(\d{2,3})\s*(mph)?/i.exec(t.maxspeed ?? t["maxspeed:enforced"] ?? ""); if (!m) return null;
+  const n = +m[1]; return m[2] || n <= 85 ? n : null;
+}
+async function overpass(query: string): Promise<{ elements: Record<string, unknown>[] }> {
+  let last: Error | null = null;
+  for (const url of OVERPASS) {
+    if (timeLeft() < 30_000) break;
+    try {
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 60_000);
+      const r = await fetch(url, { method: "POST", body: "data=" + encodeURIComponent(query), headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "InvictusTrafficRadar/1.0 camera-sync" }, signal: ctl.signal });
+      clearTimeout(t);
+      if (!r.ok) throw new Error(`Overpass ${r.status}`);
+      return await r.json();
+    } catch (e) { last = e as Error; }
+  }
+  throw last ?? new Error("Overpass unreachable");
+}
+async function syncOSM() {
+  const runAt = new Date().toISOString();
+  const q = `[out:json][timeout:90];
+node["highway"="speed_camera"](${DMV_BBOX})->.cams;
+relation["type"="enforcement"](${DMV_BBOX})->.enf;
+node(r.enf:"device")->.dev;
+(.cams; .dev;)->.all;
+way(around.all:35)["highway"]["name"]->.roads;
+.cams out body; .enf out body; .dev out body; .roads out geom;`;
+  const js = await overpass(q);
+  const els = js.elements as { type: string; id: number; lat?: number; lon?: number; tags?: Record<string, string>; members?: { type: string; ref: number; role: string }[]; geometry?: { lat: number; lon: number }[] }[];
+  const nodes = new Map<number, typeof els[number]>();
+  const roads: { name: string; pts: { lat: number; lng: number }[] }[] = [];
+  const relFor = new Map<number, typeof els[number]>();      // device node id → enforcement relation
+  for (const e of els) {
+    if (e.type === "node" && e.lat != null) nodes.set(e.id, e);
+    else if (e.type === "way" && e.geometry && e.tags?.name) roads.push({ name: e.tags.name, pts: e.geometry.map((g) => ({ lat: g.lat, lng: g.lon })) });
+    else if (e.type === "relation") for (const m of e.members ?? []) if (m.type === "node" && m.role === "device") relFor.set(m.ref, e);
+  }
+  // official cameras already on file (any source but OSM): don't duplicate them
+  const official: { lat: number; lng: number }[] = [];
+  for (let from = 0; from < 20000; from += 1000) {                     // the API returns at most 1000 rows per request
+    const { data } = await admin().from("cameras").select("lat,lng").eq("status", "active").neq("source", "osm").is("owner_id", null).order("id").range(from, from + 999);
+    official.push(...(data ?? [])); if (!data || data.length < 1000) break;
+  }
+  const near = (p: { lat: number; lng: number }) => official.some((o) => Math.abs(o.lat - p.lat) < 0.001 && Math.abs(o.lng - p.lng) < 0.0013 && dist(o, p) < 60);
+  const nearestRoad = (p: { lat: number; lng: number }) => {
+    let best = "", bd = 45;
+    for (const r of roads) for (const v of r.pts) { if (Math.abs(v.lat - p.lat) > 0.001 || Math.abs(v.lng - p.lng) > 0.0013) continue; const d = dist(v, p); if (d < bd) { bd = d; best = r.name; } }
+    return best;
+  };
+  const rows: Row[] = []; let skippedDup = 0, outside = 0;
+  for (const n of nodes.values()) {
+    const p = { lat: n.lat!, lng: n.lon! };
+    const rel = relFor.get(n.id);
+    const t = { ...(rel?.tags ?? {}), ...(n.tags ?? {}) };
+    const isCam = n.tags?.highway === "speed_camera" || !!rel || /camera/i.test(n.tags?.enforcement ?? "");
+    if (!isCam) continue;
+    const j = jurisdictionAt(p.lat, p.lng);
+    if (!j) { outside++; continue; }
+    if (near(p)) { skippedDup++; continue; }
+    const enf = (rel?.tags?.enforcement ?? n.tags?.enforcement ?? "maxspeed").toLowerCase();
+    const kind = /traffic_signals|red.?light/.test(enf) ? "Red light" : /stop/.test(enf) ? "Stop sign" : /bus/.test(enf) ? "Bus lane" : /toll|access|weight|height/.test(enf) ? "Other" : "Speed";
+    if (kind === "Other") continue;
+    const road = t.name && !/speed camera|camera/i.test(t.name) ? t.name : nearestRoad(p) || t["addr:street"] || "";
+    const heading = osmHeading(t);
+    const dirTxt = heading == null ? "" : " " + (["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(heading / 45) % 8]) + "/B";
+    rows.push({
+      ...base(runAt), verified: false, source: "osm", source_ref: `n${n.id}`, jurisdiction: j,
+      name: `${road || kind + " camera"}${dirTxt}${t.description && t.description.length < 60 && !road ? " · " + t.description : ""}`.slice(0, 160),
+      lat: p.lat, lng: p.lng, kind, speed_limit: osmLimit(t), heading,
+    });
+  }
+  if (!rows.length) return `OpenStreetMap: no cameras returned; kept existing`;
+  for (let i = 0; i < rows.length; i += 500) {
+    const { error } = await admin().from("cameras").upsert(rows.slice(i, i + 500), { onConflict: "source,source_ref" });
+    if (error) throw error;
+  }
+  const { count } = await admin().from("cameras").update({ status: "retired" }, { count: "exact" }).eq("source", "osm").eq("status", "active").lt("last_seen_at", runAt);
+  const byState: Record<string, number> = {};
+  for (const r of rows) { const st = String(r.jurisdiction).slice(-2); byState[st] = (byState[st] ?? 0) + 1; }
+  return `OpenStreetMap: ${rows.length} active (${Object.entries(byState).map(([k, v]) => `${k} ${v}`).join(", ")}), ${count ?? 0} retired, ${skippedDup} already covered by official lists, ${outside} outside MD/DC/VA`;
+}
+
 interface Listed { cameras: { location: string; direction: string | null; type: string; speed_limit: number | null }[] }
 const listTool = {
   name: "list_cameras",
@@ -217,7 +345,7 @@ async function syncWebSources() {
 serve(async (req) => {
   requireCron(req);
   const report: string[] = [];
-  for (const [label, fn] of [["DC", syncDC], ["Montgomery County", syncMoCo], ["Prince George's County", syncPG]] as const) {
+  for (const [label, fn] of [["DC", syncDC], ["Montgomery County", syncMoCo], ["Prince George's County", syncPG], ["Arlington County", syncArlington], ["OpenStreetMap", syncOSM]] as const) {
     try { report.push(await fn()); } catch (e) { report.push(`${label} failed: ${(e as Error).message}`); }
   }
   report.push(...await syncWebSources());

@@ -1,6 +1,6 @@
 // The home map: markers for tickets, cameras, community reports, and you.
-import { S, sens, activeReports, cameraTickets, cameraPasses, ticketSpeed } from './store.js';
-import { esc, money, ago, DC, headingName, bus } from './util.js';
+import { S, sens, activeReports, cameraTickets, cameraPasses, ticketSpeed, isWatched, toggleWatch } from './store.js';
+import { esc, money, ago, DC, headingName, bus, toast } from './util.js';
 import { carSvg } from './cars.js';
 
 export const TILE = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -38,10 +38,12 @@ export function cameraPopup(c) {
   const got = tix.length ? `<div style="margin-top:4px;color:#d42a2a;font-weight:700">🎫 Got you ${tix.length === 1 ? 'once' : tix.length + ' times'}${tix.some((t) => t.fine) ? ' · ' + money(tix.reduce((a, t) => a + (t.fine || 0), 0)) : ''}</div>` : '';
   const passes = cameraPasses(c), fastest = passes.reduce((m, p) => Math.max(m, p.mph || 0), 0), tk = ticketSpeed(c);
   const drove = passes.length ? `<div style="margin-top:4px;color:#0d9488;font-weight:600">🚗 Driven past ${passes.length === 1 ? 'once' : passes.length + ' times'} · fastest ${fastest} mph${tk ? (fastest >= tk ? ' · <span style="color:#d42a2a">ticket speed</span>' : ' · tickets from ' + tk) : ''}</div>` : '';
+  const w = isWatched(c);
   return `<b>${esc(c.name)}</b><br>${esc(c.kind)} camera${c.limit ? ' · limit ' + c.limit + ' mph' : ''}<br>
-    <small>${c.official ? (c.verified ? 'Official list' : 'From county website, not yet verified') + (c.jurisdiction ? ' · ' + esc(c.jurisdiction) : '') : 'Your pin · drag to adjust'}
+    <small>${c.official ? (c.source === 'osm' ? 'Mapped in OpenStreetMap (community)' : c.verified ? 'Official list' : 'From county website, not yet verified') + (c.jurisdiction ? ' · ' + esc(c.jurisdiction) : '') : 'Your pin · drag to adjust'}
     ${c.heading != null ? ' · enforces ' + headingName(c.heading) : ''}</small>${got}${drove}
-    <div class="popbtns"><button data-tix="${esc(c.id)}">🎫 I got a ticket here</button></div>`;
+    ${w ? '<div style="margin-top:4px;color:#ea580c;font-weight:600">👁 On your watch list: earlier warning + slow-down nudge</div>' : ''}
+    <div class="popbtns"><button data-watch="${esc(c.id)}">${w ? '👁 Stop watching' : '👁 Watch this camera'}</button><button data-tix="${esc(c.id)}">🎫 I got a ticket here</button></div>`;
 }
 
 const byId = { official: new Map(), camera: new Map(), ticket: new Map() };
@@ -64,8 +66,8 @@ export function drawMarkers() {
   if (S.db.settings.officialCams) {
     const driven = new Set(S.db.passes.map((p) => p.cameraId));
     S.db.official.forEach((c) => {
-      const got = cameraTickets(c).length > 0, past = driven.has(c.id);
-      byId.official.set(c.id, L.circleMarker([c.lat, c.lng], { radius: got ? 8 : past ? 7 : 6, color: '#fff', weight: 1.5, fillColor: got ? '#d42a2a' : past ? '#0d9488' : c.verified ? '#d99100' : '#b08a3a', fillOpacity: 0.95, renderer: canvas })
+      const got = cameraTickets(c).length > 0, past = driven.has(c.id), w = isWatched(c);
+      byId.official.set(c.id, L.circleMarker([c.lat, c.lng], { radius: got || w ? 8 : past ? 7 : 6, color: w ? '#ea580c' : '#fff', weight: w ? 3 : 1.5, fillColor: got ? '#d42a2a' : w ? '#f97316' : past ? '#0d9488' : c.verified ? '#d99100' : '#b08a3a', fillOpacity: 0.95, renderer: canvas })
         .bindPopup(cameraPopup(c)).addTo(layers.official));
     });
   }
@@ -99,4 +101,6 @@ document.addEventListener('click', (e) => {
   if (b) { b.disabled = true; bus.emit('vote', b.dataset.id, +b.dataset.vote); }
   const t = e.target.closest('[data-tix]');
   if (t) { map.closePopup(); bus.emit('ticket-from-camera', t.dataset.tix); }
+  const w = e.target.closest('[data-watch]');
+  if (w) { const on = toggleWatch({ id: w.dataset.watch }); map.closePopup(); toast(on ? 'Watching this camera: earlier warning and a slow-down nudge.' : 'Removed from your watch list'); }
 });

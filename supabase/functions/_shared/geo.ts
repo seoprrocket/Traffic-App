@@ -1,3 +1,4 @@
+import { DMV_AREAS } from "./dmv-areas.ts";
 // Geography helpers shared by the agents.
 
 export interface Pt { lat: number; lng: number }
@@ -99,3 +100,22 @@ export function scrub(text: string | null | undefined): string {
       /^\d+(st|nd|rd|th|mph|am|pm|ft|mi|min|hrs?)$/i.test(m) ? m : "[removed]")
     .trim();
 }
+
+// ---- Which county / city is a point in? (Maryland, DC, Virginia) ----------------
+function inRing(x: number, y: number, ring: number[][]) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / ((yj - yi) || 1e-12) + xi) inside = !inside;
+  }
+  return inside;
+}
+/** "Montgomery County, MD", "Washington, DC", "Arlington County, VA", "Richmond City, VA"… or null outside the DMV. */
+export function jurisdictionAt(lat: number, lng: number): string | null {
+  for (const a of DMV_AREAS) {
+    if (lng < a.b[0] || lng > a.b[2] || lat < a.b[1] || lat > a.b[3]) continue;
+    if (a.r.some((ring) => inRing(lng, lat, ring))) return a.n;
+  }
+  return null;
+}
+export const stateOf = (j: string | null) => (!j ? null : /, DC$|Washington, DC/.test(j) ? "DC" : /, VA$/.test(j) ? "VA" : /, MD$/.test(j) ? "MD" : null);

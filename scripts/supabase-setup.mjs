@@ -46,7 +46,7 @@ const steps = {
     const [{ ok }] = await sql("select to_regclass('public.tickets') is not null as ok");
     if (!ok) { await sql(file('20260929000000_init.sql')); note('✅ Database built'); }
     else note('✅ Database already built');
-    for (const f of ['20260929000050_setup_status.sql', '20260929000200_maryland.sql', '20260929000300_hazards.sql', '20261014000000_retire_zero_coords.sql', '20261014000100_ticket_camera.sql', '20261014000200_camera_passes.sql', '20261015000000_saved_lists.sql']) await sql(file(f));
+    for (const f of ['20260929000050_setup_status.sql', '20260929000200_maryland.sql', '20260929000300_hazards.sql', '20261014000000_retire_zero_coords.sql', '20261014000100_ticket_camera.sql', '20261014000200_camera_passes.sql', '20261015000000_saved_lists.sql', '20261015000100_dmv_sources.sql']) await sql(file(f));
     note('✅ Database updates applied (status check, Maryland, hazard types)');
   },
 

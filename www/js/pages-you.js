@@ -1,10 +1,10 @@
 // Driver Profile, Account, Alert Log, Data Export, Settings, and the legal pages.
 import { S, save, persist, replaceDb, SENS, upsertLocal } from './store.js';
-import { $, $$, esc, money, stamp, today, toast, download, csv } from './util.js';
+import { $, $$, esc, money, stamp, today, toast, download, csv, bus } from './util.js';
 import { pageHead, bindBack, openSheet, closeSheet, head, atOpts, confirmDel, busy, go } from './ui.js';
 import { raise, playSamples } from './engine.js';
 import { unlockAudio } from './native.js';
-import { cloudConfigured, usingOverride, sendCode, verifyCode, signOut, syncNow, saveProfile, deleteAccount, loadOfficialCameras } from './cloud.js';
+import { cloudConfigured, usingOverride, sendCode, verifyCode, signOut, syncNow, saveProfile, deleteAccount, loadOfficialCameras, signInPassword, signUpPassword, resetPassword, updatePassword, sendSms, verifySms, e164 } from './cloud.js';
 import { summary } from './pages-main.js';
 import { pushState, enablePush, disablePush, testPush, pushTrip } from './netlify.js';
 import { CAR_STYLES, CAR_COLORS, carSvg } from './cars.js';
@@ -64,27 +64,40 @@ export function renderProfile() {
 }
 
 // ---------------------------------------------------------------- Account
-let codeFor = null;
+let codeFor = null, method = localStorage.getItem('tr.signin') || 'password', smsFor = null;
+const whoAmI = () => S.user?.email || (S.user?.phone ? '+' + String(S.user.phone).replace(/^\+/, '') : 'your account');
 export function renderAccount() {
   const host = $('#p-account');
   const out = S.db.outbox.length;
   host.innerHTML = `${pageHead('Account', 'Sync across devices and share with other drivers')}
     ${!cloudConfigured ? `<div class="card"><h2>Backend not connected</h2><p class="note" style="margin:0">This copy of the app isn't connected to Supabase yet, so everything stays on this phone and the AI features are off. Open the <a href="setup.html">setup dashboard</a> to connect it step by step.</p></div>`
     : (usingOverride ? `<div class="privacy">This phone is connected through the <a href="setup.html">setup dashboard</a> only. Deploy config.js so everyone's app connects.</div>` : '') +
-      (S.user ? `<div class="card sec"><h2>Signed in</h2><p style="margin:0"><b>${esc(S.user.email)}</b></p>
+      (S.user ? `<div class="card sec"><h2>Signed in</h2><p style="margin:0"><b>${esc(whoAmI())}</b></p>
         <p class="note" style="margin:0">${out ? `${out} change${out > 1 ? 's' : ''} waiting to sync.` : 'Everything is synced.'} Last sync ${S.db.lastPull ? stamp(S.db.lastPull) : 'never'}.</p>
-        <div class="btns"><button class="btn" id="ac-sync">Sync now</button><button class="btn" id="ac-out">Sign out</button></div></div>
+        <div class="btns"><button class="btn" id="ac-sync">Sync now</button><button class="btn" id="ac-pw">${S.user.email ? 'Set or change password' : 'Add a password'}</button><button class="btn" id="ac-out">Sign out</button></div>
+        <p class="note small" style="margin:0">You stay signed in on this phone until you tap Sign out. With a password set, signing in on another phone takes just your email and password.</p></div>
       <div class="card sec"><h2>Delete account</h2><p class="note" style="margin:0">Permanently deletes your account and everything stored on the server: tickets, routes, drive history and reports. This can't be undone. Export a backup first if you want to keep a copy.</p>
         <div class="btns"><button class="btn danger" id="ac-del">Delete my account</button></div></div>`
-    : `<form id="ac-form" class="card sec"><h2>Sign in or create an account</h2>
+    : `${document.body.classList.contains('gated') ? '<div class="privacy" style="margin-bottom:10px"><b>Welcome to Invictus Traffic Radar.</b> Sign in or create an account to continue — your tickets, cameras, saved places and settings follow you to any phone.</div>' : ''}<div class="card sec"><h2>Sign in or create an account</h2>
         ${(() => { const n = S.db.tickets.filter((t) => !t.example).length; return n ? `<div class="privacy">📍 <b>${n} ticket location${n === 1 ? '' : 's'}</b> saved on this phone. They upload to your account when you sign in.</div>` : ''; })()}
-        <p class="note" style="margin:0">${codeFor ? `Check <b>${esc(codeFor)}</b>. Tap the link in the email on this phone, or type the code if the email shows one. It can take a minute; check spam too.` : 'We\'ll email you a sign-in link. No password needed. Anything already on this phone uploads to your account.'}</p>
-        ${codeFor && /iphone|ipad/i.test(navigator.userAgent) && navigator.standalone ? '<p class="note small" style="margin:0">On iPhone, the link opens in Safari, not this Home Screen app. If it does, type the code here instead, or sign in once in Safari and again here.</p>' : ''}
-        <label class="f">Email<input type="email" id="ac-email" required autocomplete="email" value="${esc(codeFor || '')}"></label>
-        ${codeFor ? '<label class="f">Code from the email (if it shows one)<input type="text" id="ac-code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required></label>' : ''}
-        <button class="btn primary" type="submit" id="ac-go">${codeFor ? 'Sign in with code' : 'Email me a sign-in link'}</button>
-        ${codeFor ? '<button class="btn" type="button" id="ac-restart">Use a different email</button>' : ''}
-        <p class="note" style="margin:0">By continuing you agree to the <a href="#terms">Terms</a> and <a href="#privacy">Privacy Policy</a>.</p></form>`)}
+        <div class="seg small" id="ac-method"><button data-m="password" aria-pressed="${method === 'password'}">Email &amp; password</button><button data-m="link" aria-pressed="${method === 'link'}">Email link</button><button data-m="phone" aria-pressed="${method === 'phone'}">Phone (text)</button></div>
+        ${method === 'password' ? `<form id="ac-pwform">
+          <label class="f">Email<input type="email" id="ac-email" required autocomplete="email"></label>
+          <label class="f">Password<input type="password" id="ac-pass" required minlength="8" autocomplete="current-password" placeholder="8+ characters"></label>
+          <div class="btns"><button class="btn primary" type="submit" id="ac-go">Sign in</button><button class="btn" type="button" id="ac-signup">Create account</button><button class="btn" type="button" id="ac-forgot">Forgot password?</button></div>
+          <p class="note small" style="margin:0">Signed in with an email link before? Tap "Forgot password?" once to set a password for that same account.</p></form>`
+        : method === 'phone' ? `<form id="ac-smsform">
+          <p class="note" style="margin:0">${smsFor ? `We texted a code to <b>${esc(smsFor)}</b>.` : 'We\'ll text you a 6-digit code. Standard message rates apply.'}</p>
+          <label class="f">Mobile number<input type="tel" id="ac-phone" required autocomplete="tel" inputmode="tel" placeholder="(240) 555-0123" value="${esc(smsFor || '')}"></label>
+          ${smsFor ? '<label class="f">Code from the text<input type="text" id="ac-smscode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required></label>' : ''}
+          <div class="btns"><button class="btn primary" type="submit" id="ac-go">${smsFor ? 'Sign in with code' : 'Text me a code'}</button>${smsFor ? '<button class="btn" type="button" id="ac-smsrestart">Use a different number</button>' : ''}</div></form>`
+        : `<form id="ac-form">
+          <p class="note" style="margin:0">${codeFor ? `Check <b>${esc(codeFor)}</b>. Tap the link in the email on this phone, or type the code if the email shows one. It can take a minute; check spam too.` : 'We\'ll email you a sign-in link. No password needed.'}</p>
+          ${codeFor && /iphone|ipad/i.test(navigator.userAgent) && navigator.standalone ? '<p class="note small" style="margin:0">On iPhone, the link opens in Safari, not this Home Screen app. If it does, type the code here instead, or sign in once in Safari and again here.</p>' : ''}
+          <label class="f">Email<input type="email" id="ac-email" required autocomplete="email" value="${esc(codeFor || '')}"></label>
+          ${codeFor ? '<label class="f">Code from the email (if it shows one)<input type="text" id="ac-code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required></label>' : ''}
+          <div class="btns"><button class="btn primary" type="submit" id="ac-go">${codeFor ? 'Sign in with code' : 'Email me a sign-in link'}</button>${codeFor ? '<button class="btn" type="button" id="ac-restart">Use a different email</button>' : ''}</div></form>`}
+        <p class="note" style="margin:0">By continuing you agree to the <a href="#terms">Terms</a> and <a href="#privacy">Privacy Policy</a>.</p></div>`)}
     <div class="btns"><a class="btn" href="#privacy">Privacy Policy</a><a class="btn" href="#terms">Terms of Use</a></div>`;
   host.querySelector('#ac-sync')?.addEventListener('click', async (e) => { busy(e.currentTarget, true, 'Syncing…'); await syncNow(); await loadOfficialCameras(true); renderAccount(); toast('Synced'); });
   host.querySelector('#ac-out')?.addEventListener('click', async () => { await signOut(); renderAccount(); toast('Signed out. Your data stays on this phone.'); });
@@ -94,6 +107,39 @@ export function renderAccount() {
     try { await deleteAccount(); toast('Your account was deleted'); go('map'); } catch (err) { toast(err.message); busy(del, false); }
   }));
   host.querySelector('#ac-restart')?.addEventListener('click', () => { codeFor = null; renderAccount(); });
+  host.querySelector('#ac-smsrestart')?.addEventListener('click', () => { smsFor = null; renderAccount(); });
+  $$('#ac-method button', host).forEach((b) => (b.onclick = () => { method = b.dataset.m; localStorage.setItem('tr.signin', method); renderAccount(); }));
+  host.querySelector('#ac-pw')?.addEventListener('click', () => passwordSheet());
+  const done = () => { codeFor = null; smsFor = null; if (!S.db.acceptedTerms) S.db.acceptedTerms = Date.now(); persist(); toast('Signed in. Syncing your data…'); go(S.view === 'map' ? 'map' : 'more'); };   // the sign-in gate already moved to the map
+  host.querySelector('#ac-pwform')?.addEventListener('submit', async (e) => {
+    e.preventDefault(); const b = host.querySelector('#ac-go'); busy(b, true, 'Signing in…');
+    try { await signInPassword(host.querySelector('#ac-email').value.trim(), host.querySelector('#ac-pass').value); done(); }
+    catch (err) { toast(err.message, 6000); busy(b, false); }
+  });
+  host.querySelector('#ac-signup')?.addEventListener('click', async (e) => {
+    const email = host.querySelector('#ac-email').value.trim(), pw = host.querySelector('#ac-pass').value;
+    if (!/.+@.+\..+/.test(email)) { toast('Enter your email first'); return; }
+    if (pw.length < 8) { toast('Choose a password of 8 characters or more'); return; }
+    busy(e.currentTarget, true, 'Creating…');
+    try { const live = await signUpPassword(email, pw); if (live) done(); else { toast(`Almost done: confirm your email. We sent a link to ${email}.`, 8000); busy(e.currentTarget, false); } }
+    catch (err) { toast(err.message, 6000); busy(e.currentTarget, false); }
+  });
+  host.querySelector('#ac-forgot')?.addEventListener('click', async (e) => {
+    const email = host.querySelector('#ac-email').value.trim();
+    if (!/.+@.+\..+/.test(email)) { toast('Enter your email first, then tap Forgot password'); return; }
+    busy(e.currentTarget, true, 'Sending…');
+    try { await resetPassword(email); toast(`Check ${email} for a "reset password" link. Open it on this phone and choose a new password.`, 8000); } catch (err) { toast(err.message, 6000); }
+    busy(e.currentTarget, false);
+  });
+  host.querySelector('#ac-smsform')?.addEventListener('submit', async (e) => {
+    e.preventDefault(); const b = host.querySelector('#ac-go'); busy(b, true);
+    const phone = e164(host.querySelector('#ac-phone').value);
+    if (!phone) { toast('Enter a 10-digit mobile number'); busy(b, false); return; }
+    try {
+      if (!smsFor) { await sendSms(phone); smsFor = phone; renderAccount(); toast('Sent. Check your messages.'); }
+      else { await verifySms(phone, host.querySelector('#ac-smscode').value.trim()); done(); }
+    } catch (err) { toast(err.message, 7000); busy(b, false); }
+  });
   host.querySelector('#ac-form')?.addEventListener('submit', async (e) => {
     e.preventDefault(); const b = host.querySelector('#ac-go'); busy(b, true);
     const email = host.querySelector('#ac-email').value.trim();
@@ -104,6 +150,27 @@ export function renderAccount() {
   });
   bindBack(host);
 }
+
+/** Set or change the password on the signed-in account (also opened automatically from a reset-password link). */
+export function passwordSheet(recovery = false) {
+  openSheet(`${head(recovery ? 'Choose a new password' : 'Set a password')}
+    <div class="sec">
+      <p class="note" style="margin:0">${recovery ? 'You opened a reset link. Pick a new password for ' + esc(whoAmI()) + '.' : 'Next time you can sign in with ' + esc(whoAmI()) + ' and this password — no email link needed.'}</p>
+      <label class="f">New password<input type="password" id="pw-1" minlength="8" autocomplete="new-password" placeholder="8+ characters"></label>
+      <label class="f">Again<input type="password" id="pw-2" minlength="8" autocomplete="new-password"></label>
+      <div class="btns"><button class="btn primary" id="pw-save">Save password</button></div>
+    </div>`, (s) => {
+    s.querySelector('#pw-save').onclick = async (e) => {
+      const a = s.querySelector('#pw-1').value, b = s.querySelector('#pw-2').value;
+      if (a.length < 8) { toast('Use 8 characters or more'); return; }
+      if (a !== b) { toast('The two passwords don\'t match'); return; }
+      busy(e.currentTarget, true, 'Saving…');
+      try { await updatePassword(a); closeSheet(); toast('Password saved. You can sign in with it from now on.'); if (recovery) go('account'); }
+      catch (err) { toast(err.message, 6000); busy(e.currentTarget, false); }
+    };
+  });
+}
+bus.on('recovery', () => passwordSheet(true));
 
 // ---------------------------------------------------------------- Alert log
 let logFilter = 'all';
@@ -201,7 +268,7 @@ export function openSettings() {
     <h3 class="sech">Phone notifications</h3>
     <div id="s-push" class="note">Checking…</div>
     <h3 class="sech">More</h3>
-    <label class="switch"><input type="checkbox" id="s-off" ${st.officialCams ? 'checked' : ''}><span><b>Official camera lists</b><small>Warn me about the cameras DC, Montgomery County and Prince George's County publish, plus county lists, not just my pins.</small></span></label>
+    <label class="switch"><input type="checkbox" id="s-off" ${st.officialCams ? 'checked' : ''}><span><b>Official camera lists</b><small>Warn me about every camera on file for Maryland, Washington DC and Virginia — official feeds (DC, Montgomery, Prince George's, Arlington), county web pages, and cameras mapped in OpenStreetMap — not just my pins.</small></span></label>
     <div class="f"><span>Map direction</span><small class="hint">The map always faces north (true north up). The compass on the map and the hands-free screen show which way you're travelling.</small></div>
     <div class="f"><span>Recent searches</span><small class="hint">${(st && S.db.recent?.length) || 0} saved on this phone (never uploaded).</small><div class="btns"><button type="button" class="btn" id="s-clr-recent"${S.db.recent?.length ? '' : ' disabled'}>Delete recent searches</button></div></div>
     <label class="f">Keep the screen on<select id="s-screen"><option value="always"${st.screenOn !== 'driving' ? ' selected' : ''}>Always while the app is open</option><option value="driving"${st.screenOn === 'driving' ? ' selected' : ''}>Only while driving</option></select><small class="hint">Stops the phone from dimming, sleeping or locking while Invictus Traffic Radar is on screen. Switching to another app lets it sleep as usual.</small></label>

@@ -7,7 +7,7 @@ const KEY = 'ticketRadar.v1';
 export const DEFAULT_SETTINGS = {
   lead: 5, ticketRadius: 300, alertType: 'voice', share: false, ai: true, sensitivity: 'medium',
   officialCams: true, speedLimits: true, handsFreeAuto: true,
-  screenOn: 'always', carStyle: 'dot', carColor: '#f4f5f7', navMuted: false, navVoice: 'all', avoid: [], engine: 'petrol', ecoRoutes: false, parkLayer: false, logPasses: true, speedOverBy: 5, speedMax: 0, roadBumps: true, roadCurves: true, roadLimits: true, roadTolls: true,
+  screenOn: 'always', watchCams: [], carStyle: 'dot', carColor: '#f4f5f7', navMuted: false, navVoice: 'all', avoid: [], engine: 'petrol', ecoRoutes: false, parkLayer: false, logPasses: true, speedOverBy: 5, speedMax: 0, roadBumps: true, roadCurves: true, roadLimits: true, roadTolls: true,
 };
 export const DEFAULT_PROFILE = { name: '', homeLabel: '', workLabel: '', home: null, work: null, avoidRisk: 'warn', emailCoach: true };
 const LISTS = ['tickets', 'cameras', 'reports', 'routes', 'commutes', 'events', 'alerts', 'trips', 'outbox', 'official', 'community', 'hotspots', 'coach', 'predictions', 'disputes', 'plans', 'passes', 'lists', 'places', 'recent', 'reminders'];
@@ -27,6 +27,7 @@ export function normalize(d) {
   LISTS.forEach((k) => { if (!Array.isArray(d[k])) d[k] = []; });
   d.settings = { ...DEFAULT_SETTINGS, ...(d.settings || {}) };
   if (!Array.isArray(d.settings.avoid)) d.settings.avoid = [];
+  if (!Array.isArray(d.settings.watchCams)) d.settings.watchCams = [];
   if (d.settings.navMuted && !(d.settings || {}).navVoiceSet) { d.settings.navVoice = 'mute'; }
   if (d.settings.voice === false && d.settings.alertType === 'voice') d.settings.alertType = 'sound';
   delete d.settings.voice;
@@ -127,10 +128,20 @@ export function updatePass(p, mph) {
   queue('camera_passes', 'upsert', { id: p.id });
   persist(); bus.emit('log');
 }
-/** Speed at which this camera's jurisdiction starts ticketing: DC from 11 over the limit, Maryland from 12 over. */
+/** Speed at which this camera's jurisdiction starts ticketing: DC from 11 over the limit, Maryland from 12 over, Virginia from 10 over. */
 export function ticketSpeed(c) {
   if (!c.limit) return null;
-  return c.limit + (/DC|District/i.test(c.jurisdiction || '') ? 11 : 12);
+  const j = c.jurisdiction || '';
+  return c.limit + (/DC|District/i.test(j) ? 11 : /, VA$|Virginia/i.test(j) ? 10 : 12);
+}
+/** Watched cameras: ones you flagged from My roads (or the map) for an earlier, louder warning and a slow-down nudge. */
+export const isWatched = (c) => S.db.settings.watchCams.includes(c.id);
+export function toggleWatch(c) {
+  const w = S.db.settings.watchCams;
+  const on = !w.includes(c.id);
+  S.db.settings.watchCams = on ? [...w, c.id] : w.filter((x) => x !== c.id);
+  save();
+  return on;
 }
 /** Everything you logged while driving past this camera, newest first. */
 export const cameraPasses = (c) => S.db.passes.filter((p) => p.cameraId === c.id);

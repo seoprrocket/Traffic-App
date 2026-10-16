@@ -1,5 +1,5 @@
 // List, Stats, Route and More tabs, plus helpers other pages reuse.
-import { S, removeLocal, activeReports, allCameras, cameraTickets, ticketSpeed } from './store.js';
+import { S, removeLocal, activeReports, allCameras, cameraTickets, ticketSpeed, isWatched, toggleWatch } from './store.js';
 import { $, $$, esc, money, dist, fmtDist, ago, segDist, streetKey, bus, toast } from './util.js';
 import { map, layers } from './mapview.js';
 import { E } from './engine.js';
@@ -49,21 +49,24 @@ function roadsList(host) {
   const risky = cams.filter((g) => g.ticketable), close = cams.filter((g) => !g.ticketable && g.overs);
   cams.sort((a, b) => roadsSort === 'risk' ? (b.ticketable - a.ticketable) || (b.overs - a.overs) || (b.last - a.last) : roadsSort === 'often' ? (b.n - a.n) || (b.last - a.last) : b.last - a.last);
   const seg = `<div class="seg small" id="roadsSort"><button data-s="recent" aria-pressed="${roadsSort === 'recent'}">Recent</button><button data-s="often" aria-pressed="${roadsSort === 'often'}">Most driven</button><button data-s="risk" aria-pressed="${roadsSort === 'risk'}">Ticket risk</button></div>`;
-  const intro = `<p class="note" style="margin:0">Every camera you drive past is logged here automatically, with your fastest speed through its zone. DC tickets from <b>11 mph over</b> the limit, Maryland from <b>12 over</b>.${S.db.settings.logPasses === false ? ' <b>Logging is turned off in Settings.</b>' : ''}</p>`;
-  const sum = cams.length ? `<div class="roadsum"><span><b>${cams.length}</b> camera${cams.length === 1 ? '' : 's'} on your roads</span><span class="${risky.length ? 'bad' : ''}"><b>${risky.length}</b> at ticket speed</span><span class="${close.length ? 'warn' : ''}"><b>${close.length}</b> over the limit</span></div>` : '';
+  const intro = `<p class="note" style="margin:0">Every camera you drive past is logged here automatically, with your fastest speed through its zone. DC tickets from <b>11 mph over</b> the limit, Maryland from <b>12 over</b>, Virginia from <b>10 over</b>.${S.db.settings.logPasses === false ? ' <b>Logging is turned off in Settings.</b>' : ''}</p>`;
+  const watching = cams.filter((g) => isWatched({ id: g.cameraId })).length;
+  const sum = cams.length ? `<div class="roadsum"><span><b>${cams.length}</b> camera${cams.length === 1 ? '' : 's'} on your roads</span><span class="${risky.length ? 'bad' : ''}"><b>${risky.length}</b> at ticket speed</span><span class="${close.length ? 'warn' : ''}"><b>${close.length}</b> over the limit</span><span><b>${watching}</b> on watch</span></div><p class="note" style="margin:4px 0 0">Tap <b>👁 Watch</b> on any camera to be warned a minute earlier, louder, and nudged to slow down whenever you're over its limit nearby.</p>` : '';
   host.innerHTML = intro + sum + (cams.length ? seg + cams.map((g) => {
     const tk = ticketSpeed(g);
-    const tag = g.ticketable ? `<span class="tag bad">Ticket speed</span>` : g.overs ? `<span class="tag md">Over the limit</span>` : g.limit ? `<span class="tag lo">Under the limit</span>` : '';
+    const w = isWatched({ id: g.cameraId });
+    const tag = (g.ticketable ? `<span class="tag bad">Ticket speed</span>` : g.overs ? `<span class="tag md">Over the limit</span>` : g.limit ? `<span class="tag lo">Under the limit</span>` : '') + (w ? '<span class="tag watch">👁 Watching</span>' : '');
     const risk = tk ? (g.fastest >= tk ? `You hit <b>${g.fastest} mph</b> here — ${tk}+ gets a ticket.` : g.fastest > g.limit ? `Fastest <b>${g.fastest} mph</b> · a ticket starts at <b>${tk}</b>.` : `Fastest <b>${g.fastest} mph</b> · keep it under ${tk} to stay safe.`) : `Fastest <b>${g.fastest} mph</b>${g.limit ? ' · limit ' + g.limit : ' · no posted limit on file'}.`;
     return `<div class="row c${g.ticketable ? ' got' : ''}"><div class="main"><div class="ttl">${esc(g.name)}${tag}</div>
       <div class="meta">${esc(g.kind)} camera${g.limit ? ' · limit ' + g.limit + ' mph' : ''}${g.jurisdiction ? ' · ' + esc(g.jurisdiction) : ''}</div>
       <div class="meta">Driven past ${g.n === 1 ? 'once' : g.n + ' times'} · last ${ago(g.last)}${g.overs ? ` · over the limit ${g.overs === 1 ? 'once' : g.overs + ' times'}` : ''}</div>
       <div class="meta">${risk}</div>
-      <div class="orow"><button class="sbtn" data-rgo="${esc(g.cameraId)}">Map</button><button class="sbtn" data-rtix="${esc(g.cameraId)}">🎫 Got a ticket here</button><button class="sbtn danger" data-rdel="${esc(g.cameraId)}">Forget</button></div></div></div>`;
+      <div class="orow"><button class="sbtn${w ? ' primary' : ''}" data-rwatch="${esc(g.cameraId)}">${w ? '👁 Watching' : '👁 Watch'}</button><button class="sbtn" data-rgo="${esc(g.cameraId)}">Map</button><button class="sbtn" data-rtix="${esc(g.cameraId)}">🎫 Got a ticket here</button><button class="sbtn danger" data-rdel="${esc(g.cameraId)}">Forget</button></div></div></div>`;
   }).join('') : `<div class="empty">Nothing logged yet. Start a drive on the Map tab and every camera you pass shows up here, with your speed against its limit.</div>`);
   $$('#roadsSort button', host).forEach((b) => (b.onclick = () => { roadsSort = b.dataset.s; roadsList(host); }));
   const cam = (id) => allCameras().find((c) => c.id === id) || S.db.official.find((c) => c.id === id) || by.get(id);
   $$('[data-rgo]', host).forEach((b) => (b.onclick = () => { const c = cam(b.dataset.rgo); go('map'); map.setView([c.lat, c.lng], 17); }));
+  $$('[data-rwatch]', host).forEach((b) => (b.onclick = () => { const on = toggleWatch({ id: b.dataset.rwatch }); toast(on ? 'Watching this camera: earlier warning and a slow-down nudge.' : 'Removed from your watch list'); roadsList(host); }));
   $$('[data-rtix]', host).forEach((b) => (b.onclick = () => { const c = cam(b.dataset.rtix); if (c) ticketFromCamera({ ...c, id: b.dataset.rtix }); }));
   $$('[data-rdel]', host).forEach((b) => (b.onclick = () => confirmDel(b, () => {
     S.db.passes.filter((p) => p.cameraId === b.dataset.rdel).forEach((p) => removeLocal('passes', p.id));
@@ -123,7 +126,7 @@ function officialList() {
     const n = cameraTickets(c).length;
     return `${head}<div class="row c${n ? ' got' : ''}"><span class="emo">${n ? '🎫' : CAM_ICON[c.kind] || '📷'}</span><div class="main"><div class="ttl">${esc(c.name)}${n ? ` <span class="tag bad">got you ${n === 1 ? 'once' : n + '×'}</span>` : ''}</div>
       <div class="meta">${esc(c.kind)}${c.kind === 'School zone' ? '' : ' camera'}${c.limit ? ' · limit ' + c.limit + ' mph' : ''}${c.heading != null ? ' · catches ' + DIRN[Math.round(c.heading / 45) % 8] + '-bound' : ''}${E.me ? ' · ' + fmtDist(dist(E.me, c)) + ' from you · ' + esc(c.jurisdiction || '') : ''}${c.verified === false ? ' · <span class="bad">not yet verified</span>' : ''}</div>
-      <div class="orow"><button class="sbtn" data-otix="${esc(c.id)}" title="Log a ticket from this camera">🎫 Got a ticket</button><button class="sbtn" data-ogo="${esc(c.id)}">Map</button></div></div></div>`;
+      <div class="orow"><button class="sbtn${isWatched(c) ? ' primary' : ''}" data-owatch="${esc(c.id)}">${isWatched(c) ? '👁 Watching' : '👁 Watch'}</button><button class="sbtn" data-otix="${esc(c.id)}" title="Log a ticket from this camera">🎫 Got a ticket</button><button class="sbtn" data-ogo="${esc(c.id)}">Map</button></div></div></div>`;
   }).join('');
   return `<h3 class="sech" style="margin-top:18px">Official cameras</h3>
     <input type="search" id="cam-q" value="${esc(camQ)}" placeholder="Search ${all.length} cameras by street or school" autocomplete="off" style="width:100%;box-sizing:border-box;margin-bottom:8px">
@@ -138,6 +141,7 @@ function bindOfficial(host) {
   host.querySelector('#cam-more')?.addEventListener('click', () => { camShow += 100; renderList(); });
   host.querySelector('#cam-got')?.addEventListener('click', () => { camGot = !camGot; camShow = 40; renderList(); });
   $$('[data-otix]', host).forEach((b) => (b.onclick = () => ticketFromCamera(S.db.official.find((y) => y.id === b.dataset.otix))));
+  $$('[data-owatch]', host).forEach((b) => (b.onclick = () => { const on = toggleWatch({ id: b.dataset.owatch }); toast(on ? 'Watching this camera: earlier warning and a slow-down nudge.' : 'Removed from your watch list'); b.textContent = on ? '👁 Watching' : '👁 Watch'; b.classList.toggle('primary', on); }));
   $$('[data-ogo]', host).forEach((b) => (b.onclick = () => { const x = S.db.official.find((y) => y.id === b.dataset.ogo); if (x) { go('map'); map.setView([x.lat, x.lng], 17); } }));
 }
 

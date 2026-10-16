@@ -1,7 +1,7 @@
 {
   "name": "Invictus Traffic Radar",
   "short_name": "Invictus Radar",
-  "description": "Speed-camera and ticket-zone warnings for DC and Maryland drivers.",
+  "description": "Speed-camera and ticket-zone warnings for Maryland, Washington DC and Virginia (DMV) drivers.",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#0e1720",

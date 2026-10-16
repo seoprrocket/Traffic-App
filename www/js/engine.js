@@ -1,5 +1,5 @@
 // Drive mode: follows your GPS and fires the warnings.
-import { S, sens, allCameras, activeReports, logAlert, logEvent, logTrip , cameraTickets, logPass, updatePass } from './store.js';
+import { S, sens, allCameras, activeReports, logAlert, logEvent, logTrip , cameraTickets, logPass, updatePass, isWatched } from './store.js';
 import { $, esc, dist, bearing, angleDiff, fmtDist, sayDist, streetKey, ago, bus, toast, headingSpoken, sameStreet } from './util.js';
 import { sayType } from './reports.js';
 import { watchLocation, notify, beep, speak, vibrate, keepAwake, askNotifyPermission, unlockAudio, isNative } from './native.js';
@@ -121,7 +121,7 @@ function onFix(p) {
 }
 
 // Auto-log of every camera you drive past (My roads tab): one row per pass, speed = your fastest inside the 250 m zone
-const passing = {};
+const passing = {}, nudgeAt = {};
 function trackPass(c, isIn, mph) {
   const p = passing[c.id];
   if (isIn && !p) { if (S.db.settings.logPasses !== false) passing[c.id] = logPass(c, mph); }
@@ -166,19 +166,22 @@ function check(cur) {
     const off = E.heading == null ? 999 : angleDiff(bearing(cur, c), E.heading);
     const myWay = route ? route.on && route.ahead > 0 : E.heading != null && off <= 45 && d * Math.sin((off * Math.PI) / 180) <= 150 && sameStreet(c.name, E.road) !== false;
     const live = approaching && rightWay && ahead && route?.on !== false;
+    // My roads: log the pass only when the camera is on my line of travel (not one on a cross street 200 m away)
+    trackPass(c, d <= 250 && rightWay && (E.heading == null || off <= 60 || d <= 100), mph);
     geofence('c' + c.id, c.name, 'Camera', d <= 250 && rightWay, mph, c.limit);
-    trackPass(c, d <= 250 && rightWay, mph);
     if (!live) continue;
     if (myWay || d <= 250) candidates.push({ kind: 'camera', label: `${c.kind} camera`, name: c.name, d, limit: c.limit });
     if (d < 800 && c.limit && d < limitD) { limitD = d; limitNear = c.limit; }
     const eta = d / v;
     const dir = c.heading != null ? headingSpoken(c.heading) : '';
-    if (eta <= lead && d > 250 && myWay && !fired['far' + c.id]) {
+    const watched = isWatched(c);
+    const myLead = watched ? lead + 60 : lead;                     // a watched camera warns a minute earlier
+    if (eta <= myLead && d > 250 && myWay && !fired['far' + c.id]) {
       fired['far' + c.id] = 1;
       const mins = Math.max(1, Math.round(eta / 60));
       const got = cameraTickets(c).length;
-      raise('camera', got ? `⚠️ Camera that got you · ~${mins} min` : `Camera in ~${mins} min`, `${c.name} · ${fmtDist(d)} ahead${c.limit ? ' · limit ' + c.limit + ' mph' : ''}${got ? ` · ticketed you ${got === 1 ? 'once' : got + ' times'}` : ''}`,
-        `Heads up. ${c.kind} camera${dir ? ', ' + dir + ',' : ''} in about ${mins} minute${mins > 1 ? 's' : ''}${c.limit ? '. Speed limit ' + c.limit : ''}.${got ? ' This one has ticketed you before.' : ''}`);
+      raise('camera', got ? `⚠️ Camera that got you · ~${mins} min` : watched ? `👁 Watched camera · ~${mins} min` : `Camera in ~${mins} min`, `${c.name} · ${fmtDist(d)} ahead${c.limit ? ' · limit ' + c.limit + ' mph' : ''}${got ? ` · ticketed you ${got === 1 ? 'once' : got + ' times'}` : watched ? ' · on your watch list' : ''}`,
+        `${watched ? 'Watch out. Your flagged' : 'Heads up.'} ${c.kind} camera${dir ? ', ' + dir + ',' : ''} in about ${mins} minute${mins > 1 ? 's' : ''}${c.limit ? '. Speed limit ' + c.limit : ''}.${got ? ' This one has ticketed you before.' : watched ? ' Ease off now.' : ''}`);
       if (eta <= 60) fired['one' + c.id] = 1;                 // already inside the last minute: one call-out is enough
     }
     // Second call-out: one minute out ("One minute to camera"), when the first warning was further out than that
@@ -191,7 +194,12 @@ function check(cur) {
       fired['near' + c.id] = 1;
       fired['one' + c.id] = 1;
       const got = cameraTickets(c).length;
-      raise('camera', got ? 'Camera that got you · right ahead' : 'Camera right ahead', `${c.name}${c.limit ? ' · keep it under ' + c.limit + ' mph' : ''}`, `${c.kind} camera right ahead.${c.limit ? ' Keep it under ' + c.limit + '.' : ''}${got ? ' It got you before.' : ''}`);
+      raise('camera', got ? 'Camera that got you · right ahead' : watched ? '👁 Watched camera · right ahead' : 'Camera right ahead', `${c.name}${c.limit ? ' · keep it under ' + c.limit + ' mph' : ''}`, `${watched ? 'Watched' : c.kind} camera right ahead.${c.limit ? ' Keep it under ' + c.limit + '.' : ''}${got ? ' It got you before.' : ''}`);
+    }
+    // Watched camera and you're over its limit within 600 m: a slow-down nudge, every 20 s until you're under
+    if (watched && c.limit && d <= 600 && mph > c.limit && Date.now() - (nudgeAt[c.id] || 0) > 20000) {
+      nudgeAt[c.id] = Date.now();
+      raise('speed', `Slow down: ${Math.round(mph)} in a ${c.limit}`, `Watched camera ${fmtDist(d)} ahead · ${c.name}`, `Slow down. ${c.limit} for the camera ahead.`, null, { log: false });
     }
   }
 
